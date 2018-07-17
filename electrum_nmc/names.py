@@ -95,6 +95,20 @@ def format_name_op(name_op):
         return "\tName Update\n\t\t" + formatted_name + "\n\t\t" + formatted_value
 
 
+def get_default_name_tx_label(tx):
+    for addr, v, name_op in tx.get_outputs():
+        if name_op is not None:
+            # TODO: Handle multiple atomic name ops.
+            # TODO: Include "name" field.
+            if name_op["op"] == OP_NAME_NEW:
+                return "Name Pre-Registration"
+            if name_op["op"] == OP_NAME_FIRSTUPDATE:
+                return "Name Registration"
+            if name_op["op"] == OP_NAME_UPDATE:
+                return "Name Update"
+    return None
+
+
 from .bitcoin import push_script
 from .transaction import match_decoded, opcodes, script_GetOp
 from .util import bh2u
