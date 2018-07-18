@@ -489,7 +489,7 @@ class Abstract_Wallet(AddressSynchronizer):
 
     def get_default_label(self, tx_hash):
         # TODO: what happens if a name would have a non-empty default non-name label?
-        name_label = get_default_name_tx_label(self.transactions.get(tx_hash))
+        name_label = get_default_name_tx_label(self, self.transactions.get(tx_hash))
         if name_label is not None:
             return name_label
 

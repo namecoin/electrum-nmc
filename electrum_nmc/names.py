@@ -95,11 +95,18 @@ def format_name_op(name_op):
         return "\tName Update\n\t\t" + formatted_name + "\n\t\t" + formatted_value
 
 
-def get_default_name_tx_label(tx):
+def get_default_name_tx_label(wallet, tx):
     for addr, v, name_op in tx.get_outputs():
         if name_op is not None:
             # TODO: Handle multiple atomic name ops.
             # TODO: Include "name" field.
+            name_input_is_mine, name_output_is_mine = get_wallet_name_delta(wallet, tx)
+            if not name_input_is_mine and not name_output_is_mine:
+                return None
+            if name_input_is_mine and not name_output_is_mine:
+                return "Name Transfer (Outgoing)"
+            if not name_input_is_mine and name_output_is_mine:
+                return "Name Transfer (Incoming)"
             if name_op["op"] == OP_NAME_NEW:
                 return "Name Pre-Registration"
             if name_op["op"] == OP_NAME_FIRSTUPDATE:
@@ -107,6 +114,22 @@ def get_default_name_tx_label(tx):
             if name_op["op"] == OP_NAME_UPDATE:
                 return "Name Update"
     return None
+
+
+def get_wallet_name_delta(wallet, tx):
+    name_input_is_mine = False
+    name_output_is_mine = False
+    for txin in tx.inputs():
+        addr = wallet.get_txin_address(txin)
+        if wallet.is_mine(addr):
+            prev_tx = wallet.transactions.get(txin['prevout_hash'])
+            if prev_tx.get_outputs()[txin['prevout_n']][2] is not None:
+                name_input_is_mine = True
+    for addr, value, name_op in tx.get_outputs():
+        if name_op is not None and wallet.is_mine(addr):
+            name_output_is_mine = True
+
+    return name_input_is_mine, name_output_is_mine
 
 
 from .bitcoin import push_script
