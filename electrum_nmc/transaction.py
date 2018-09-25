@@ -439,6 +439,9 @@ def get_address_from_output_script(_bytes, *, net=None):
     except MalformedBitcoinScript:
         decoded = None
 
+    # Strip the name prefix if one is present.
+    decoded = split_name_script(decoded)["address_scriptPubKey"]
+
     # The Genesis Block, self-payments, and pay-by-IP-address payments look like:
     # 65 BYTES:... CHECKSIG
     match = [ opcodes.OP_PUSHDATA4, opcodes.OP_CHECKSIG ]
@@ -1282,3 +1285,7 @@ def tx_from_str(txt):
     tx_dict = json.loads(str(txt))
     assert "hex" in tx_dict.keys()
     return tx_dict["hex"]
+
+
+from .names import split_name_script
+
