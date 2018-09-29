@@ -24,6 +24,16 @@
 # SOFTWARE.
 
 def split_name_script(decoded):
+    # So, Namecoin Core uses OP_0 when pushing an empty string as a (value).
+    # Unfortunately, Electrum doesn't match OP_0 when using OP_PUSHDATA4 as a
+    # data push opcode wildcard.  So we have to check for OP_0 separately,
+    # otherwise we'll fail to detect name operations with an empty (value).
+    # Technically, we should be doing the same check for the (name), but I
+    # can't be bothered to make the code more complex just to help out whoever
+    # registered the empty string.  The (hash) and (rand) are constant-length
+    # (at least in practice; not sure about consensus rules), so they're
+    # unaffected.
+
     # name_new TxOuts look like:
     # NAME_NEW (hash) 2DROP (Bitcoin TxOut)
     match = [ OP_NAME_NEW, opcodes.OP_PUSHDATA4, opcodes.OP_2DROP ]
@@ -33,13 +43,15 @@ def split_name_script(decoded):
     # name_firstupdate TxOuts look like:
     # NAME_FIRSTUPDATE (name) (rand) (value) 2DROP 2DROP (Bitcoin TxOut)
     match = [ OP_NAME_FIRSTUPDATE, opcodes.OP_PUSHDATA4, opcodes.OP_PUSHDATA4, opcodes.OP_PUSHDATA4, opcodes.OP_2DROP, opcodes.OP_2DROP ]
-    if match_decoded(decoded[:len(match)], match):
+    match_empty_value = [ OP_NAME_FIRSTUPDATE, opcodes.OP_PUSHDATA4, opcodes.OP_PUSHDATA4, opcodes.OP_0, opcodes.OP_2DROP, opcodes.OP_2DROP ]
+    if match_decoded(decoded[:len(match)], match) or match_decoded(decoded[:len(match_empty_value)], match_empty_value):
         return {"name_op": {"op": OP_NAME_FIRSTUPDATE, "name": decoded[1][1], "rand": decoded[2][1], "value": decoded[3][1]}, "address_scriptPubKey": decoded[len(match):]}
 
     # name_update TxOuts look like:
     # NAME_UPDATE (name) (value) 2DROP DROP (Bitcoin TxOut)
     match = [ OP_NAME_UPDATE, opcodes.OP_PUSHDATA4, opcodes.OP_PUSHDATA4, opcodes.OP_2DROP, opcodes.OP_DROP ]
-    if match_decoded(decoded[:len(match)], match):
+    match_empty_value = [ OP_NAME_UPDATE, opcodes.OP_PUSHDATA4, opcodes.OP_0, opcodes.OP_2DROP, opcodes.OP_DROP ]
+    if match_decoded(decoded[:len(match)], match) or match_decoded(decoded[:len(match_empty_value)], match_empty_value):
         return {"name_op": {"op": OP_NAME_UPDATE, "name": decoded[1][1], "value": decoded[2][1]}, "address_scriptPubKey": decoded[len(match):]}
 
     return {"name_op": None, "address_scriptPubKey": decoded}
