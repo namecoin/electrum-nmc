@@ -87,6 +87,60 @@ def name_op_to_script(name_op):
     return script
 
 
+def format_name_identifier(identifier_bytes):
+    try:
+        identifier = identifier_bytes.decode("ascii")
+    except UnicodeDecodeError:
+        return format_name_identifier_unknown_hex(identifier_bytes)
+
+    is_domain_namespace = identifier.startswith("d/")
+    if is_domain_namespace:
+        return format_name_identifier_domain(identifier)
+
+    is_identity_namespace = identifier.startswith("id/")
+    if is_identity_namespace:
+        # TODO: handle identities
+        return format_name_identifier_unknown(identifier)
+
+    return format_name_identifier_unknown(identifier)
+
+
+def format_name_identifier_domain(identifier):
+    label = identifier[len("d/"):]
+
+    if len(label) < 1:
+        return format_name_identifier_unknown(identifier)
+
+    # Source: https://github.com/namecoin/proposals/blob/master/ifa-0001.md#keys
+    if len(label) > 63:
+        return format_name_identifier_unknown(identifier)
+
+    # Source: https://github.com/namecoin/proposals/blob/master/ifa-0001.md#keys
+    label_regex = r"^(xn--)?[a-z0-9]+(-[a-z0-9]+)*$"
+    label_match = re.match(label_regex, label)
+    if label_match is None:
+        return format_name_identifier_unknown(identifier)
+
+    # Reject digits-only labels
+    number_regex = r"^[0-9]+$"
+    number_match = re.match(number_regex, label)
+    if number_match is not None:
+        return format_name_identifier_unknown(identifier)
+
+    return "Domain " + label + ".bit"
+
+def format_name_identifier_unknown(identifier):
+    # Check for non-printable characters, and print ASCII if none are found.
+    if identifier.isprintable():
+        return 'Non-standard name "' + identifier + '"'
+
+    return format_name_identifier_unknown_hex(identifier.encode("ascii"))
+
+
+def format_name_identifier_unknown_hex(identifier_bytes):
+    return "Non-standard hex name " + bh2u(identifier_bytes)
+
+
 def format_name_op(name_op):
     if name_op is None:
         return ''
@@ -95,39 +149,40 @@ def format_name_op(name_op):
     if "rand" in name_op:
         formatted_rand = "Salt = " + bh2u(name_op["rand"])
     if "name" in name_op:
-        formatted_name = "Name = Hex " + bh2u(name_op["name"])
+        formatted_name = "Name = " + format_name_identifier(name_op["name"])
     if "value" in name_op:
         formatted_value = "Data = Hex " + bh2u(name_op["value"])
 
     if name_op["op"] == OP_NAME_NEW:
-        return "\tName Pre-Registration\n\t\t" + formatted_hash
+        return "\tPre-Registration\n\t\t" + formatted_hash
     if name_op["op"] == OP_NAME_FIRSTUPDATE:
-        return "\tName Registration\n\t\t" + formatted_name + "\n\t\t" + formatted_rand + "\n\t\t" + formatted_value
+        return "\tRegistration\n\t\t" + formatted_name + "\n\t\t" + formatted_rand + "\n\t\t" + formatted_value
     if name_op["op"] == OP_NAME_UPDATE:
-        return "\tName Update\n\t\t" + formatted_name + "\n\t\t" + formatted_value
+        return "\tUpdate\n\t\t" + formatted_name + "\n\t\t" + formatted_value
 
 
 def get_default_name_tx_label(wallet, tx):
     for addr, v, name_op in tx.get_outputs():
         if name_op is not None:
             # TODO: Handle multiple atomic name ops.
-            # TODO: Include "name" field.
             name_input_is_mine, name_output_is_mine = get_wallet_name_delta(wallet, tx)
             if not name_input_is_mine and not name_output_is_mine:
                 return None
             if name_input_is_mine and not name_output_is_mine:
-                return "Name Transfer (Outgoing)"
+                return "Transfer (Outgoing): " + format_name_identifier(name_op["name"])
             if not name_input_is_mine and name_output_is_mine:
                 # A name_new transaction isn't expected to have a name input,
                 # so we don't consider it a transfer.
                 if name_op["op"] != OP_NAME_NEW:
-                    return "Name Transfer (Incoming)"
+                    return "Transfer (Incoming): " + format_name_identifier(name_op["name"])
             if name_op["op"] == OP_NAME_NEW:
-                return "Name Pre-Registration"
+                # A name_new transaction doesn't have a name output, so there's
+                # nothing to format.
+                return "Pre-Registration"
             if name_op["op"] == OP_NAME_FIRSTUPDATE:
-                return "Name Registration"
+                return "Registration: " + format_name_identifier(name_op["name"])
             if name_op["op"] == OP_NAME_UPDATE:
-                return "Name Update"
+                return "Update: " + format_name_identifier(name_op["name"])
     return None
 
 
@@ -146,6 +201,9 @@ def get_wallet_name_delta(wallet, tx):
 
     return name_input_is_mine, name_output_is_mine
 
+
+import binascii
+import re
 
 from .bitcoin import push_script
 from .transaction import match_decoded, opcodes, script_GetOp
