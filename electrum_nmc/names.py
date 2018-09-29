@@ -106,7 +106,10 @@ def get_default_name_tx_label(wallet, tx):
             if name_input_is_mine and not name_output_is_mine:
                 return "Name Transfer (Outgoing)"
             if not name_input_is_mine and name_output_is_mine:
-                return "Name Transfer (Incoming)"
+                # A name_new transaction isn't expected to have a name input,
+                # so we don't consider it a transfer.
+                if name_op["op"] != OP_NAME_NEW:
+                    return "Name Transfer (Incoming)"
             if name_op["op"] == OP_NAME_NEW:
                 return "Name Pre-Registration"
             if name_op["op"] == OP_NAME_FIRSTUPDATE:
