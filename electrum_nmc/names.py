@@ -99,8 +99,7 @@ def format_name_identifier(identifier_bytes):
 
     is_identity_namespace = identifier.startswith("id/")
     if is_identity_namespace:
-        # TODO: handle identities
-        return format_name_identifier_unknown(identifier)
+        return format_name_identifier_identity(identifier)
 
     return format_name_identifier_unknown(identifier)
 
@@ -128,6 +127,26 @@ def format_name_identifier_domain(identifier):
         return format_name_identifier_unknown(identifier)
 
     return "Domain " + label + ".bit"
+
+
+def format_name_identifier_identity(identifier):
+    label = identifier[len("id/"):]
+
+    if len(label) < 1:
+        return format_name_identifier_unknown(identifier)
+
+    # Max id/ identifier length is 255 chars according to wiki spec.  But we
+    # don't need to check for this, because that's also the max length of an
+    # identifier under the Namecoin consensus rules.
+
+    # Same as d/ regex but without IDN prefix.
+    # TODO: this doesn't exactly match the https://wiki.namecoin.org spec.
+    label_regex = r"^[a-z0-9]+(-[a-z0-9]+)*$"
+    label_match = re.match(label_regex, label)
+    if label_match is None:
+        return format_name_identifier_unknown(identifier)
+
+    return "Identity " + label
 
 def format_name_identifier_unknown(identifier):
     # Check for non-printable characters, and print ASCII if none are found.
