@@ -669,7 +669,7 @@ class AddressSynchronizer(PrintError):
                 is_partial = True
         if not is_mine:
             is_partial = False
-        for addr, value in tx.get_outputs():
+        for addr, value, name_op in tx.get_outputs():
             v_out += value
             if self.is_mine(addr):
                 v_out_mine += value
