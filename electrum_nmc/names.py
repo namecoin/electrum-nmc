@@ -160,6 +160,22 @@ def format_name_identifier_unknown_hex(identifier_bytes):
     return "Non-standard hex name " + bh2u(identifier_bytes)
 
 
+def format_name_value(identifier_bytes):
+    try:
+        identifier = identifier_bytes.decode("ascii")
+    except UnicodeDecodeError:
+        return format_name_value_hex(identifier_bytes)
+
+    if not identifier.isprintable():
+        return format_name_value_hex(identifier_bytes)
+
+    return "ASCII " + identifier
+
+
+def format_name_value_hex(identifier_bytes):
+    return "Hex " + bh2u(identifier_bytes)
+
+
 def format_name_op(name_op):
     if name_op is None:
         return ''
@@ -170,7 +186,7 @@ def format_name_op(name_op):
     if "name" in name_op:
         formatted_name = "Name = " + format_name_identifier(name_op["name"])
     if "value" in name_op:
-        formatted_value = "Data = Hex " + bh2u(name_op["value"])
+        formatted_value = "Data = " + format_name_value(name_op["value"])
 
     if name_op["op"] == OP_NAME_NEW:
         return "\tPre-Registration\n\t\t" + formatted_hash
