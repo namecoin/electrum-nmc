@@ -82,7 +82,8 @@ class TestTransaction(SequentialTestCase):
                 'prevout_n': 0,
                 'scriptPubKey': '76a914230ac37834073a42146f11ef8414ae929feaafc388ac',
                 'type': TYPE_ADDRESS,
-                'value': 1000000}],
+                'value': 1000000,
+                'name_op': None}], # name_op=None added by Namecoin
             'partial': True,
             'segwit_ser': False,
             'version': 1,
@@ -94,7 +95,8 @@ class TestTransaction(SequentialTestCase):
         self.assertEqual(tx.as_dict(), {'hex': unsigned_blob, 'complete': False, 'final': True})
         #self.assertEqual(tx.get_outputs(), [('14CHYaaByjJZpx4oHBpfDMdqhTyXnZ3kVs', 1000000)])
         # Converted to Namecoin using `contrib/convertAddress.py` from Namecoin Core.
-        self.assertEqual(tx.get_outputs(), [('MymekE5Au7Q8MVKJZ19ERsnkRhNanZco6s', 1000000)])
+        # name_op=None added by Namecoin
+        self.assertEqual(tx.get_outputs(), [('MymekE5Au7Q8MVKJZ19ERsnkRhNanZco6s', 1000000, None)])
         #self.assertEqual(tx.get_output_addresses(), ['14CHYaaByjJZpx4oHBpfDMdqhTyXnZ3kVs'])
         # Converted to Namecoin using `contrib/convertAddress.py` from Namecoin Core.
         self.assertEqual(tx.get_output_addresses(), ['MymekE5Au7Q8MVKJZ19ERsnkRhNanZco6s'])
@@ -137,7 +139,8 @@ class TestTransaction(SequentialTestCase):
                 'prevout_n': 0,
                 'scriptPubKey': '76a914230ac37834073a42146f11ef8414ae929feaafc388ac',
                 'type': TYPE_ADDRESS,
-                'value': 1000000}],
+                'value': 1000000,
+                'name_op': None}], # name_op=None added by Namecoin
             'partial': False,
             'segwit_ser': False,
             'version': 1
