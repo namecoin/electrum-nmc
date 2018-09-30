@@ -62,7 +62,10 @@ def split_name_script(decoded):
     return {"name_op": None, "address_scriptPubKey": decoded}
 
 def get_name_op_from_output_script(_bytes):
-    decoded = [x for x in script_GetOp(_bytes)]
+    try:
+        decoded = [x for x in script_GetOp(_bytes)]
+    except MalformedBitcoinScript:
+        decoded = None
 
     # Extract the name script if one is present.
     return split_name_script(decoded)["name_op"]
@@ -254,7 +257,7 @@ import binascii
 import re
 
 from .bitcoin import push_script, script_to_scripthash
-from .transaction import match_decoded, opcodes, script_GetOp
+from .transaction import MalformedBitcoinScript, match_decoded, opcodes, script_GetOp
 from .util import bh2u
 
 OP_NAME_NEW = opcodes.OP_1
