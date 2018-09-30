@@ -24,6 +24,11 @@
 # SOFTWARE.
 
 def split_name_script(decoded):
+    # This case happens if a script was malformed and couldn't be decoded by
+    # transaction.get_address_from_output_script.
+    if decoded is None:
+        return {"name_op": None, "address_scriptPubKey": decoded}
+
     # So, Namecoin Core uses OP_0 when pushing an empty string as a (value).
     # Unfortunately, Electrum doesn't match OP_0 when using OP_PUSHDATA4 as a
     # data push opcode wildcard.  So we have to check for OP_0 separately,
