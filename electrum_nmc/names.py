@@ -87,6 +87,14 @@ def name_op_to_script(name_op):
     return script
 
 
+def name_identifier_to_scripthash(identifier_bytes):
+    name_op = {"op": OP_NAME_UPDATE, "name": identifier_bytes, "value": bytes([])}
+    script = name_op_to_script(name_op)
+    script += '6a' # OP_RETURN
+
+    return script_to_scripthash(script)
+
+
 def format_name_identifier(identifier_bytes):
     try:
         identifier = identifier_bytes.decode("ascii")
@@ -240,7 +248,7 @@ def get_wallet_name_delta(wallet, tx):
 import binascii
 import re
 
-from .bitcoin import push_script
+from .bitcoin import push_script, script_to_scripthash
 from .transaction import match_decoded, opcodes, script_GetOp
 from .util import bh2u
 

@@ -38,6 +38,7 @@ from .util import bfh, bh2u, format_satoshis, json_decode, print_error, json_enc
 from . import bitcoin
 from .bitcoin import is_address,  hash_160, COIN, TYPE_ADDRESS
 from .i18n import _
+from .names import name_identifier_to_scripthash
 from .transaction import Transaction, multisig_script, TxOutput
 from .paymentrequest import PR_PAID, PR_UNPAID, PR_UNKNOWN, PR_EXPIRED
 from .plugin import run_hook
@@ -674,6 +675,81 @@ class Commands:
         if fee_level is not None:
             fee_level = Decimal(fee_level)
         return self.config.fee_per_kb(dyn=dyn, mempool=mempool, fee_level=fee_level)
+
+    @command('wn')
+    def name_show(self, identifier):
+        # TODO: support non-ASCII encodings
+        identifier_bytes = identifier.encode("ascii")
+        sh = name_identifier_to_scripthash(identifier_bytes)
+
+        txs = self.network.run_from_another_thread(self.network.get_history_for_scripthash(sh))
+
+        # Pick the most recent name op that's [12, 36000) confirmations.
+        chain_height = self.network.blockchain().height()
+        safe_height_max = chain_height - 12
+        safe_height_min = chain_height - 35999
+
+        tx_best = None
+        for tx_candidate in txs[::-1]:
+            if tx_candidate["height"] <= safe_height_max and tx_candidate["height"] >= safe_height_min:
+                tx_best = tx_candidate
+                break
+        if tx_best is None:
+            raise Exception("Invalid height")
+        txid = tx_best["tx_hash"]
+        height = tx_best["height"]
+
+        # The height is now verified to be safe.
+
+        # TODO: This will write data to the wallet, which may be a privacy
+        # leak.  We should allow a null wallet to be used.
+        self.network.run_from_another_thread(self.wallet.verifier._request_and_verify_single_proof(txid, height))
+
+        # The txid is now verified to come from a safe height in the blockchain.
+
+        if self.wallet and txid in self.wallet.transactions:
+            tx = self.wallet.transactions[txid]
+        else:
+            raw = self.network.run_from_another_thread(self.network.get_transaction(txid))
+            if raw:
+                tx = Transaction(raw)
+            else:
+                raise Exception("Unknown transaction")
+
+        if tx.txid() != txid:
+            raise Exception("txid mismatch")
+
+        # the tx is now verified to come from a safe height in the blockchain
+
+        for idx, o in enumerate(tx.outputs()):
+            if o.name_op is not None:
+                if "name" in o.name_op:
+                    if o.name_op["name"] != identifier_bytes:
+                        # Identifier mismatch.  This will definitely fail under
+                        # current Namecoin consensus rules, but in a future
+                        # hardfork there might be multiple name outputs, so we
+                        # might as well future-proof and scan the other
+                        # outputs.
+                        continue
+
+                    # the tx is now verified to represent the identifier at a
+                    # safe height in the blockchain
+
+                    return {
+                        "name": o.name_op["name"].decode("ascii"),
+                        "name_encoding": "ascii",
+                        "value": o.name_op["value"].decode("ascii"),
+                        "value_encoding": "ascii",
+                        "txid": txid,
+                        "vout": idx,
+                        "address": o.address,
+                        "height": height,
+                        "expires_in": height - chain_height + 36000,
+                        "expired": False,
+                        "ismine": self.wallet.is_mine(o.address),
+                    }
+
+        raise Exception("missing name op")
 
     @command('')
     def help(self):
