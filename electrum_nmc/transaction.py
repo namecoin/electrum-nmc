@@ -65,6 +65,9 @@ class MalformedBitcoinScript(Exception):
 
 TxOutput = NamedTuple("TxOutput", [('type', int), ('address', str), ('value', Union[int, str]), ("name_op", dict)])
 # ^ value is str when the output is set to max: '!'
+TxOutput.__new__.__defaults__ = (None,)
+# Assume no name_op if one wasn't provided; this reduces merge conflicts from
+# upstream Electrum.  Based on https://stackoverflow.com/a/18348004 .
 
 
 TxOutputHwInfo = NamedTuple("TxOutputHwInfo", [('address_index', Tuple),
