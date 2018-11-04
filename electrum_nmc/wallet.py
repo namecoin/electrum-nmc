@@ -795,7 +795,7 @@ class Abstract_Wallet(AddressSynchronizer):
         info = {}
         xpubs = self.get_master_public_keys()
         for txout in tx.outputs():
-            _type, addr, amount = txout
+            _type, addr, amount, name_op = txout
             if self.is_mine(addr):
                 index = self.get_address_index(addr)
                 pubkeys = self.get_public_keys(addr)

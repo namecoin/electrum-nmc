@@ -28,24 +28,76 @@ def split_name_script(decoded):
     # NAME_NEW (hash) 2DROP (Bitcoin TxOut)
     match = [ OP_NAME_NEW, opcodes.OP_PUSHDATA4, opcodes.OP_2DROP ]
     if match_decoded(decoded[:len(match)], match):
-        return {"name_op": OP_NAME_NEW, "address_scriptPubKey": decoded[len(match):]}
+        return {"name_op": {"op": OP_NAME_NEW, "hash": decoded[1][1]}, "address_scriptPubKey": decoded[len(match):]}
 
     # name_firstupdate TxOuts look like:
     # NAME_FIRSTUPDATE (name) (rand) (value) 2DROP 2DROP (Bitcoin TxOut)
     match = [ OP_NAME_FIRSTUPDATE, opcodes.OP_PUSHDATA4, opcodes.OP_PUSHDATA4, opcodes.OP_PUSHDATA4, opcodes.OP_2DROP, opcodes.OP_2DROP ]
     if match_decoded(decoded[:len(match)], match):
-        return {"name_op": OP_NAME_FIRSTUPDATE, "address_scriptPubKey": decoded[len(match):]}
+        return {"name_op": {"op": OP_NAME_FIRSTUPDATE, "name": decoded[1][1], "rand": decoded[2][1], "value": decoded[3][1]}, "address_scriptPubKey": decoded[len(match):]}
 
     # name_update TxOuts look like:
     # NAME_UPDATE (name) (value) 2DROP DROP (Bitcoin TxOut)
     match = [ OP_NAME_UPDATE, opcodes.OP_PUSHDATA4, opcodes.OP_PUSHDATA4, opcodes.OP_2DROP, opcodes.OP_DROP ]
     if match_decoded(decoded[:len(match)], match):
-        return {"name_op": OP_NAME_UPDATE, "address_scriptPubKey": decoded[len(match):]}
+        return {"name_op": {"op": OP_NAME_UPDATE, "name": decoded[1][1], "value": decoded[2][1]}, "address_scriptPubKey": decoded[len(match):]}
 
     return {"name_op": None, "address_scriptPubKey": decoded}
 
+def get_name_op_from_output_script(_bytes):
+    decoded = [x for x in script_GetOp(_bytes)]
 
-from .transaction import match_decoded, opcodes
+    # Extract the name script if one is present.
+    return split_name_script(decoded)["name_op"]
+
+def name_op_to_script(name_op):
+    if name_op is None:
+        script = ''
+    elif name_op["op"] == OP_NAME_NEW:
+        script = '51'                                 # OP_NAME_NEW
+        script += push_script(bh2u(name_op["hash"]))
+        script += '6d'                                # OP_2DROP
+    elif name_op["op"] == OP_NAME_FIRSTUPDATE:
+        script = '52'                                 # OP_NAME_FIRSTUPDATE
+        script += push_script(bh2u(name_op["name"]))
+        script += push_script(bh2u(name_op["rand"]))
+        script += push_script(bh2u(name_op["value"]))
+        script += '6d'                                # OP_2DROP
+        script += '6d'                                # OP_2DROP
+    elif name_op["op"] == OP_NAME_UPDATE:
+        script = '53'                                 # OP_NAME_UPDATE
+        script += push_script(bh2u(name_op["name"]))
+        script += push_script(bh2u(name_op["value"]))
+        script += '6d'                                # OP_2DROP
+        script += '75'                                # OP_DROP
+    else:
+        raise BitcoinException('unknown name op: {}'.format(name_op))
+    return script
+
+
+def format_name_op(name_op):
+    if name_op is None:
+        return ''
+    if "hash" in name_op:
+        formatted_hash = "Commitment = " + bh2u(name_op["hash"])
+    if "rand" in name_op:
+        formatted_rand = "Salt = " + bh2u(name_op["rand"])
+    if "name" in name_op:
+        formatted_name = "Name = Hex " + bh2u(name_op["name"])
+    if "value" in name_op:
+        formatted_value = "Data = Hex " + bh2u(name_op["value"])
+
+    if name_op["op"] == OP_NAME_NEW:
+        return "\tName Pre-Registration\n\t\t" + formatted_hash
+    if name_op["op"] == OP_NAME_FIRSTUPDATE:
+        return "\tName Registration\n\t\t" + formatted_name + "\n\t\t" + formatted_rand + "\n\t\t" + formatted_value
+    if name_op["op"] == OP_NAME_UPDATE:
+        return "\tName Update\n\t\t" + formatted_name + "\n\t\t" + formatted_value
+
+
+from .bitcoin import push_script
+from .transaction import match_decoded, opcodes, script_GetOp
+from .util import bh2u
 
 OP_NAME_NEW = opcodes.OP_1
 OP_NAME_FIRSTUPDATE = opcodes.OP_2

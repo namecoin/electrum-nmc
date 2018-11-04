@@ -312,7 +312,7 @@ def fast_txid(tx):
 def stub_parse_output(vds, i):
     vds.read_int64() # d['value']
     vds.read_bytes(vds.read_compact_size()) # scriptPubKey
-    return {'type': TYPE_SCRIPT, 'address': None, 'value': 0}
+    return {'type': TYPE_SCRIPT, 'address': None, 'value': 0, 'name_op': None}
 
 # This is equivalent to tx.deserialize(), but doesn't parse outputs.
 def fast_tx_deserialize(tx):

@@ -63,7 +63,7 @@ class MalformedBitcoinScript(Exception):
     pass
 
 
-TxOutput = NamedTuple("TxOutput", [('type', int), ('address', str), ('value', Union[int, str])])
+TxOutput = NamedTuple("TxOutput", [('type', int), ('address', str), ('value', Union[int, str]), ("name_op", dict)])
 # ^ value is str when the output is set to max: '!'
 
 
@@ -571,6 +571,12 @@ def parse_output(vds, i):
         raise SerializationError('invalid output amount (negative)')
     scriptPubKey = vds.read_bytes(vds.read_compact_size())
     d['type'], d['address'] = get_address_from_output_script(scriptPubKey)
+    d['name_op'] = get_name_op_from_output_script(scriptPubKey)
+    if d['name_op'] is not None:
+        # Subtract the 0.01 NMC that's permanently locked in the name
+        d['value'] = d['value'] - COIN // 100
+        if d['value'] < 0:
+            raise SerializationError('invalid output amount (insufficient for name output)')
     d['scriptPubKey'] = bh2u(scriptPubKey)
     d['prevout_n'] = i
     return d
@@ -764,7 +770,7 @@ class Transaction:
         else:
             d = deserialize(self.raw, force_full_parse, raw_bytes=self.raw_bytes, start_position=self.start_position)
         self._inputs = d['inputs']
-        self._outputs = [TxOutput(x['type'], x['address'], x['value']) for x in d['outputs']]
+        self._outputs = [TxOutput(x['type'], x['address'], x['value'], x['name_op']) for x in d['outputs']]
         self.locktime = d['lockTime']
         self.version = d['version']
         self.is_partial_originally = d['partial']
@@ -795,13 +801,15 @@ class Transaction:
         return self
 
     @classmethod
-    def pay_script(self, output_type, addr):
+    def pay_script(self, output_type, addr, name_op = None):
+        name_prefix = name_op_to_script(name_op)
+
         if output_type == TYPE_SCRIPT:
-            return addr
+            return name_prefix + addr
         elif output_type == TYPE_ADDRESS:
-            return bitcoin.address_to_script(addr)
+            return name_prefix + bitcoin.address_to_script(addr)
         elif output_type == TYPE_PUBKEY:
-            return bitcoin.public_key_to_p2pk_script(addr)
+            return name_prefix + bitcoin.public_key_to_p2pk_script(addr)
         else:
             raise TypeError('Unknown output type')
 
@@ -1029,12 +1037,15 @@ class Transaction:
     def BIP_LI01_sort(self):
         # See https://github.com/kristovatlas/rfc/blob/master/bips/bip-li01.mediawiki
         self._inputs.sort(key = lambda i: (i['prevout_hash'], i['prevout_n']))
-        self._outputs.sort(key = lambda o: (o[2], self.pay_script(o[0], o[1])))
+        self._outputs.sort(key = lambda o: (o[2], self.pay_script(o[0], o[1], o[3])))
 
     def serialize_output(self, output):
-        output_type, addr, amount = output
+        output_type, addr, amount, name_op = output
+        if name_op is not None:
+            # Add the 0.01 NMC that's permanently locked in the name
+            amount = amount + COIN // 100
         s = int_to_hex(amount, 8)
-        script = self.pay_script(output_type, addr)
+        script = self.pay_script(output_type, addr, name_op)
         s += var_int(len(script)//2)
         s += script
         return s
@@ -1124,7 +1135,7 @@ class Transaction:
         return sum(x['value'] for x in self.inputs())
 
     def output_value(self):
-        return sum(val for tp, addr, val in self.outputs())
+        return sum(val for tp, addr, val, name_op in self.outputs())
 
     def get_fee(self):
         return self.input_value() - self.output_value()
@@ -1247,11 +1258,11 @@ class Transaction:
                 addr = bitcoin.public_key_to_p2pkh(bfh(o.address))
             else:
                 addr = 'SCRIPT ' + o.address
-            outputs.append((addr, o.value))      # consider using yield (addr, v)
+            outputs.append((addr, o.value, o.name_op))      # consider using yield (addr, v)
         return outputs
 
     def get_output_addresses(self):
-        return [addr for addr, val in self.get_outputs()]
+        return [addr for addr, val, name_op in self.get_outputs()]
 
 
     def has_address(self, addr):
@@ -1287,5 +1298,5 @@ def tx_from_str(txt):
     return tx_dict["hex"]
 
 
-from .names import split_name_script
+from .names import get_name_op_from_output_script, name_op_to_script, split_name_script
 

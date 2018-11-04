@@ -36,6 +36,7 @@ from qrcode import exceptions
 
 from electrum_nmc.bitcoin import base_encode
 from electrum_nmc.i18n import _
+from electrum_nmc.names import format_name_op
 from electrum_nmc.plugin import run_hook
 from electrum_nmc import simple_config
 
@@ -324,10 +325,13 @@ class TxDialog(QDialog, MessageBoxMixin):
         o_text.setReadOnly(True)
         o_text.setMaximumHeight(100)
         cursor = o_text.textCursor()
-        for addr, v in self.tx.get_outputs():
+        for addr, v, name_op in self.tx.get_outputs():
             cursor.insertText(addr, text_format(addr))
             if v is not None:
                 cursor.insertText('\t', ext)
                 cursor.insertText(format_amount(v), ext)
+            if name_op is not None:
+                cursor.insertText('\n', ext)
+                cursor.insertText(format_name_op(name_op), ext)
             cursor.insertBlock()
         vbox.addWidget(o_text)

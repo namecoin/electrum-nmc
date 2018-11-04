@@ -378,9 +378,9 @@ class Ledger_KeyStore(Hardware_KeyStore):
 
         txOutput = var_int(len(tx.outputs()))
         for txout in tx.outputs():
-            output_type, addr, amount = txout
+            output_type, addr, amount, name_op = txout
             txOutput += int_to_hex(amount, 8)
-            script = tx.pay_script(output_type, addr)
+            script = tx.pay_script(output_type, addr, name_op)
             txOutput += var_int(len(script)//2)
             txOutput += script
         txOutput = bfh(txOutput)
