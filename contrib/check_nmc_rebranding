@@ -34,14 +34,20 @@ for i in **/*.py; do
     # trezor plugin uses '"electrum pinging device"' as a ping echo blob
     # test_util unit tests use 'electrum test' as an address label, etc
     # setup.py contains a copyright statement that references upstream
-    if ./contrib/print_python_strings "$i" "electrum " \
+    # crash reporter is a known bug: https://github.com/namecoin/electrum-nmc/issues/115
+    # Update checker is a known bug: https://github.com/namecoin/electrum-nmc/issues/93
+    if ./contrib/print_python_strings "$i" "electrum[ ,\\.]" \
         | grep -v "#:import" \
         | grep -v "plugins/coldcard.*\"b'1234 Electrum Plugin 4321'\"" \
         | grep -v "plugins/keepkey.*'\"electrum pinging device\"'" \
         | grep -v "plugins/safe_t.*'\"electrum pinging device\"'" \
         | grep -v "plugins/trezor.*'\"electrum pinging device\"'" \
         | grep -v "tests/test_util.py.*'electrum test'" \
-        | grep -v "setup.py.*based on Electrum by Thomas Voegtlin"; then
+        | grep -v "setup.py.*based on Electrum by Thomas Voegtlin" \
+        | grep -v "base_crash_reporter.py.*electrum.org" \
+        | grep -v "org.electrum.qr.SimpleScannerActivity" \
+        | grep -v "docs.electrum.org" \
+        | grep -v "update_checker.py.*https://electrum.org/"; then
         echo "Rebranding needed"
         exit 1
     fi
