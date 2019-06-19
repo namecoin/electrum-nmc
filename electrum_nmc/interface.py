@@ -79,16 +79,20 @@ class NotificationSession(RPCSession):
         super(NotificationSession, self).__init__(*args, **kwargs)
         self.subscriptions = defaultdict(list)
         self.cache = {}
-        # The default Bitcoin frame size limit of 1 MB doesn't work for
-        # AuxPoW-based chains, because those chains' block headers have extra
-        # AuxPoW data.  A limit of 10 MB works fine for Namecoin as of block
-        # height 418744 (5 MB fails after height 155232); we set a limit of
-        # 20 MB so that we have extra wiggle room.
-        self.framer.max_size = 20000000
         self.default_timeout = NetworkTimeout.Generic.NORMAL
         self._msg_counter = itertools.count(start=1)
         self.interface = None  # type: Optional[Interface]
         self.cost_hard_limit = 0  # disable aiorpcx resource limits
+
+    # The default Bitcoin frame size limit of 1 MB doesn't work for AuxPoW-
+    # based chains, because those chains' block headers have extra AuxPoW data.
+    # A limit of 10 MB works fine for Namecoin as of block height 418744 (5 MB
+    # fails after height 155232); we set a limit of 20 MB so that we have extra
+    # wiggle room.
+    def default_framer(self):
+        framer = super(NotificationSession, self).default_framer()
+        framer.max_size = 20000000
+        return framer
 
     async def handle_request(self, request):
         self.maybe_log(f"--> {request}")
