@@ -58,27 +58,41 @@ class HeaderChunk:
         self.base_height = base_height
         self.data = data
 
+        # AuxPoW
+        self.deserialized_headers = []
+        self.stripped_data = bytearray()
+        start_position = 0
+        i = 0
+        while start_position < len(data):
+            self.stripped_data.extend(data[start_position:start_position+HEADER_SIZE])
+            height = self.base_height + i
+            header, start_position = deserialize_full_header(data, height, expect_trailing_data=True, start_position=start_position)
+            self.deserialized_headers.append(header)
+            i += 1
+
     def __repr__(self):
         return "HeaderChunk(base_height={}, data_count={})".format(self.base_height, len(self.data))
 
     def contains_height(self, height):
         return height >= self.base_height and height < self.base_height + self.get_header_count()
 
+    # Note: this strips AuxPoW
     def get_header_at_height(self, height):
         return self.get_header_at_index(height - self.base_height)
 
+    # Note: this strips AuxPoW
     def get_header_at_index(self, index):
         header_offset = index * HEADER_SIZE
-        return self.data[header_offset:header_offset + HEADER_SIZE]
+        return self.stripped_data[header_offset:header_offset + HEADER_SIZE]
 
     def get_deserialized_header_at_height(self, height):
-        return deserialize_header(self.get_header_at_height(height), height)
+        return self.get_deserialized_header_at_index(height - self.base_height)
 
     def get_deserialized_header_at_index(self, index):
-        return deserialize_header(self.get_header_at_index(index), self.base_height + index)
+        return self.deserialized_headers[index]
 
     def get_header_count(self):
-        return len(self.data) // HEADER_SIZE
+        return len(self.deserialized_headers)
 
 def serialize_header(header_dict: dict) -> str:
     s = int_to_hex(header_dict['version'], 4) \
@@ -118,7 +132,9 @@ def deserialize_full_header(s: bytes, height: int, expect_trailing_data=False, s
     h = deserialize_pure_header(pure_header_bytes, height)
     start_position += HEADER_SIZE
 
-    if auxpow.auxpow_active(h) and height > constants.net.max_checkpoint():
+    # TODO: auxpow_stripped might have wrong result when request_chunk's tip argument is non-None.
+    auxpow_stripped = height // 2016 * 2016 + 2016 - 1 <= constants.net.max_checkpoint()
+    if auxpow.auxpow_active(h) and not auxpow_stripped:
         h['auxpow'], start_position = auxpow.deserialize_auxpow_header(h, s, start_position=start_position)
 
     if expect_trailing_data:
@@ -358,31 +374,19 @@ class Blockchain(Logger):
                 if block_hash_as_num > target:
                     raise Exception(f"insufficient proof of work: {block_hash_as_num} vs target {target}")
 
-    def verify_chunk(self, index: int, chunk: HeaderChunk) -> bytes:
-        stripped = bytearray()
-        start_position = 0
+    def verify_chunk(self, index: int, chunk: HeaderChunk) -> None:
         start_height = index * 2016
         prev_hash = self.get_hash(start_height - 1)
         target = self.get_target(index-1)
-        i = 0
-        while start_position < len(data):
+        for i, header in enumerate(chunk.deserialized_headers):
             height = start_height + i
             try:
                 expected_header_hash = self.get_hash(height)
             except MissingHeader:
                 expected_header_hash = None
-            raw_header = chunk.get_header_at_index(i)
 
-            # Strip auxpow header for disk
-            stripped.extend(raw_header[:HEADER_SIZE])
-
-            header = deserialize_header(raw_header, start_height + i)
             self.verify_header(header, prev_hash, target, expected_header_hash)
             prev_hash = hash_header(header)
-
-            i = i + 1
-
-        return bytes(stripped)
 
     @with_lock
     def path(self):
@@ -675,9 +679,8 @@ class Blockchain(Logger):
             start_height = idx * 2016
             chunk = HeaderChunk(start_height, data)
             if not proof_was_provided:
-                # verify_chunk also strips the AuxPoW headers
-                data = self.verify_chunk(idx, chunk)
-            self.save_chunk(idx, data)
+                self.verify_chunk(idx, chunk)
+            self.save_chunk(idx, chunk.stripped_data)
             return True
         except BaseException as e:
             self.logger.info(f'verify_chunk idx {idx} failed: {repr(e)}')
