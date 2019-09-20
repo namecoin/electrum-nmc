@@ -50,19 +50,7 @@ class AbstractNet:
 
     @classmethod
     def max_checkpoint(cls) -> int:
-        # Namecoin: We can't actually fully use the last checkpoint, because
-        # verifying the chunk following the last checkpoint requires having the
-        # chunk for the last checkpoint, because of the timewarp hardfork.  So
-        # we artificially return one fewer checkpoint than is available.
-        #
-        # It should be noted that this hack causes Electrum-NMC to need at
-        # least 2 checkpoints, whereas upstream Electrum only needs 1.
-        #return max(0, len(cls.CHECKPOINTS) * 2016 - 1)
-        return max(0, (len(cls.CHECKPOINTS)-1) * 2016 - 1)
-
-    @classmethod
-    def rev_genesis_bytes(cls) -> bytes:
-        return bytes.fromhex(bitcoin.rev_hex(cls.GENESIS))
+        return cls.VERIFICATION_BLOCK_HEIGHT
 
 
 class BitcoinMainnet(AbstractNet):
@@ -75,7 +63,11 @@ class BitcoinMainnet(AbstractNet):
     GENESIS = "000000000062b72c5e2ceb45fbc8587e807c155b0da735e6483dfba2f0a9c770"
     DEFAULT_PORTS = {'t': '50001', 's': '50002'}
     DEFAULT_SERVERS = read_json('servers.json', {})
-    CHECKPOINTS = read_json('checkpoints.json', [])
+    # To generate this, connect to a trusted server, and then run this from the console:
+    # import asyncio
+    # asyncio.run(network.interface.get_purported_checkpoint(height))
+    VERIFICATION_BLOCK_MERKLE_ROOT = "4c6b8a34ed0ab02ef9486d0f57de24ee367e4c1735c20f7b3a79927b62310fc3"
+    VERIFICATION_BLOCK_HEIGHT = 558431
     BLOCK_HEIGHT_FIRST_LIGHTNING_CHANNELS = 497000
 
     XPRV_HEADERS = {
@@ -109,7 +101,8 @@ class BitcoinTestnet(AbstractNet):
     GENESIS = "00000007199508e34a9ff81e6ec0c477a4cccff2a4767a8eee39c11db367b008"
     DEFAULT_PORTS = {'t': '51001', 's': '51002'}
     DEFAULT_SERVERS = read_json('servers_testnet.json', {})
-    CHECKPOINTS = read_json('checkpoints_testnet.json', [])
+    VERIFICATION_BLOCK_MERKLE_ROOT = "09006bcaf5d043502ef50e9b0598014ab31bd1c449ab81a48e74f780085599b9"
+    VERIFICATION_BLOCK_HEIGHT = 1453535
 
     XPRV_HEADERS = {
         'standard':    0x04358394,  # tprv
@@ -137,7 +130,7 @@ class BitcoinRegtest(BitcoinTestnet):
     SEGWIT_HRP = "ncrt"
     GENESIS = "0f9188f13cb7b2c71f2a335e3a4fc328bf5beb436012afca590b1a11466e2206"
     DEFAULT_SERVERS = read_json('servers_regtest.json', {})
-    CHECKPOINTS = []
+    VERIFICATION_BLOCK_HEIGHT = 0
     LN_DNS_SEEDS = []
 
 
@@ -149,7 +142,7 @@ class BitcoinSimnet(BitcoinTestnet):
     SEGWIT_HRP = "sb"
     GENESIS = "683e86bd5c6d110d91b94b97137ba6bfe02dbbdb8e3dff722a669b5d69d77af6"
     DEFAULT_SERVERS = read_json('servers_regtest.json', {})
-    CHECKPOINTS = []
+    VERIFICATION_BLOCK_HEIGHT = 0
     LN_DNS_SEEDS = []
 
 
