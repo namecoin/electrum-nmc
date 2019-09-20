@@ -495,9 +495,6 @@ class Interface(Logger):
             size = min(size, tip - index * 2016 + 1)
             size = max(size, 0)
         try:
-            cp_height = constants.net.max_checkpoint()
-            if index * 2016 + size - 1 > cp_height:
-                cp_height = 0
             self._requested_chunks.add(index)
             res, proof_was_provided = await self.request_headers(index * 2016, size)
         finally:
