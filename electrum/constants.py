@@ -40,7 +40,7 @@ def read_json(filename, default):
     return r
 
 
-GIT_REPO_URL = "https://github.com/spesmilo/electrum"
+GIT_REPO_URL = "https://github.com/flurbos/electrum-uno"
 GIT_REPO_ISSUES_URL = "https://github.com/spesmilo/electrum/issues"
 
 
@@ -60,15 +60,15 @@ class AbstractNet:
 class BitcoinMainnet(AbstractNet):
 
     TESTNET = False
-    WIF_PREFIX = 0x80
-    ADDRTYPE_P2PKH = 0
-    ADDRTYPE_P2SH = 5
-    SEGWIT_HRP = "bc"
-    GENESIS = "000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f"
+    WIF_PREFIX = 0xE0
+    ADDRTYPE_P2PKH = 130
+    ADDRTYPE_P2SH = 30
+    SEGWIT_HRP = ""
+    GENESIS = "000004c2fc5fffb810dccc197d603690099a68305232e552d96ccbe8e2c52b75"
     DEFAULT_PORTS = {'t': '50001', 's': '50002'}
     DEFAULT_SERVERS = read_json('servers.json', {})
     CHECKPOINTS = read_json('checkpoints.json', [])
-    BLOCK_HEIGHT_FIRST_LIGHTNING_CHANNELS = 497000
+    # BLOCK_HEIGHT_FIRST_LIGHTNING_CHANNELS = 497000
 
     XPRV_HEADERS = {
         'standard':    0x0488ade4,  # xprv
@@ -86,12 +86,12 @@ class BitcoinMainnet(AbstractNet):
         'p2wsh':       0x02aa7ed3,  # Zpub
     }
     XPUB_HEADERS_INV = inv_dict(XPUB_HEADERS)
-    BIP44_COIN_TYPE = 0
-    LN_REALM_BYTE = 0
-    LN_DNS_SEEDS = [
-        'nodes.lightning.directory.',
-        'lseed.bitcoinstats.com.',
-    ]
+    BIP44_COIN_TYPE = 92
+    # LN_REALM_BYTE = 0
+    # LN_DNS_SEEDS = [
+    #    'nodes.lightning.directory.',
+    #    'lseed.bitcoinstats.com.',
+    # ]
 
 
 class BitcoinTestnet(AbstractNet):
