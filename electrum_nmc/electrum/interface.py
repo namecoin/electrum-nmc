@@ -482,7 +482,10 @@ class Interface(Logger):
         else:
             hexheader = res
 
-        return blockchain.deserialize_full_header(bytes.fromhex(hexheader), height), proof_was_provided
+        if proof_was_provided:
+            return blockchain.deserialize_pure_header(bytes.fromhex(hexheader), height), proof_was_provided
+        else:
+            return blockchain.deserialize_full_header(bytes.fromhex(hexheader), height), proof_was_provided
 
     async def request_chunk(self, height, tip=None, *, can_return_early=False):
         index = height // 2016
