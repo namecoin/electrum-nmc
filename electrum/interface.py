@@ -436,7 +436,7 @@ class Interface(Logger):
         res = await self.session.send_request('blockchain.block.header', [retarget_first_height, cp_height], timeout=timeout)
 
         if 'root' in res and 'branch' in res and 'header' in res:
-            retarget_first_header = blockchain.deserialize_header(bytes.fromhex(res['header']), retarget_first_height)
+            retarget_first_header = blockchain.deserialize_pure_header(bytes.fromhex(res['header']), retarget_first_height)
             retarget_last_chainwork = self.blockchain.get_chainwork(retarget_last_height)
             retarget_last_hash = self.blockchain.get_hash(retarget_last_height)
             retarget_last_bits = self.blockchain.target_to_bits(self.blockchain.get_target(retarget_last_chunk_index))
