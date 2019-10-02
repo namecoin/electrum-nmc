@@ -82,7 +82,7 @@ from electrum import util
 from electrum import constants
 from electrum import SimpleConfig
 from electrum.wallet import Wallet
-from electrum.storage import WalletStorage, get_derivation_used_for_hw_device_encryption
+from electrum.storage import WalletStorage
 from electrum.util import print_msg, print_stderr, json_encode, json_decode, UserCancelled
 from electrum.util import InvalidPassword
 from electrum.commands import get_parser, known_commands, Commands, config_variables
@@ -189,6 +189,7 @@ def get_password_for_hw_device_encrypted_storage(plugins):
     # FIXME we use the "first" device, in case of multiple ones
     name, device_info = devices[0]
     plugin = plugins.get_plugin(name)
+    from electrum.storage import get_derivation_used_for_hw_device_encryption
     derivation = get_derivation_used_for_hw_device_encryption()
     try:
         xpub = plugin.get_xpub(device_info.device.id_, derivation, 'standard', plugin.handler)
