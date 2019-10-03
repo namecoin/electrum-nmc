@@ -59,11 +59,14 @@ def check_imports():
         import pyaes
         import ecdsa
         import certifi
-        import qrcode
         import google.protobuf
         import aiorpcx
     except ImportError as e:
         sys.exit(f"Error: {str(e)}. Try 'sudo python3 -m pip install <module-name>'")
+    try:
+        import qrcode
+    except ImportError as e:
+        _logger.error(f"Error: {str(e)}. This is fine for the daemon. If you're using the GUI, try 'sudo python3 -m pip install <module-name>'")
     # the following imports are for pyinstaller
     from google.protobuf import descriptor
     from google.protobuf import message
@@ -71,10 +74,6 @@ def check_imports():
     from google.protobuf import descriptor_pb2
     # make sure that certificates are here
     assert os.path.exists(certifi.where())
-
-
-if not is_android:
-    check_imports()
 
 
 from electrum.logging import get_logger, configure_logging
@@ -91,6 +90,9 @@ from electrum import keystore
 from electrum.util import create_and_start_event_loop
 
 _logger = get_logger(__name__)
+
+if not is_android:
+    check_imports()
 
 
 # get password routine
