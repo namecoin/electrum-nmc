@@ -685,7 +685,7 @@ class Commands:
         if verify:
             if height is None:
                 raise Exception("Missing height")
-            verifier = SPV(self.network, None)._request_and_verify_single_proof(txid, height, stream_id=stream_id)
+            verifier = SPV(self.network, None)._request_and_verify_single_proof(txid, height, use_individual_header_proof=(height < constants.net.max_checkpoint()), stream_id=stream_id)
         tx = None
         if wallet:
             tx = wallet.db.get_transaction(txid)
