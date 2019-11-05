@@ -133,9 +133,15 @@ class SPV(NetworkJobOnDefaultServer):
         pos = merkle.get('pos')
         merkle_branch = merkle.get('merkle')
         if not use_individual_header_proof:
-            # we need to wait if header sync/reorg is still ongoing, hence lock:
-            async with self.network.bhi_lock:
-                header = self.network.blockchain().read_header(tx_height)
+            # TODO: This logic will work instantly if the header is available
+            # at the start, but will wait for a full syncup otherwise, even if
+            # the header becomes available almost immediately.  Can we improve
+            # on this?
+            header = self.network.blockchain().read_header(tx_height)
+            if header is None:
+                # we need to wait if header sync/reorg is still ongoing, hence lock:
+                async with self.network.bhi_lock:
+                    header = self.network.blockchain().read_header(tx_height)
         try:
             verify_tx_is_in_block(tx_hash, merkle_branch, pos, header, tx_height)
         except MerkleVerificationFailure as e:
