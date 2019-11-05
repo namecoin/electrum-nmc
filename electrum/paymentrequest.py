@@ -32,12 +32,6 @@ import urllib.parse
 import certifi
 import aiohttp
 
-
-try:
-    from . import paymentrequest_pb2 as pb2
-except ImportError:
-    sys.exit("Error: could not find paymentrequest_pb2.py. Create it with 'protoc --proto_path=electrum/ --python_out=electrum/ electrum/paymentrequest.proto'")
-
 from . import bitcoin, ecc, util, transaction, x509, rsakey
 from .util import bh2u, bfh, export_meta, import_meta, make_aiohttp_session
 from .util import PR_UNPAID, PR_EXPIRED, PR_PAID, PR_UNKNOWN, PR_INFLIGHT
@@ -50,6 +44,11 @@ from .logging import get_logger, Logger
 
 _logger = get_logger(__name__)
 
+
+try:
+    from . import paymentrequest_pb2 as pb2
+except ImportError:
+    _logger.error("Error: could not find paymentrequest_pb2.py. This is fine if BIP70 is unneeded. If you're using BIP70, create it with 'protoc --proto_path=electrum/ --python_out=electrum/ electrum/paymentrequest.proto'")
 
 REQUEST_HEADERS = {'Accept': 'application/bitcoin-paymentrequest', 'User-Agent': 'Electrum'}
 ACK_HEADERS = {'Content-Type':'application/bitcoin-payment','Accept':'application/bitcoin-paymentack','User-Agent':'Electrum'}

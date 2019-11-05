@@ -59,7 +59,6 @@ def check_imports():
         import pyaes
         import ecdsa
         import certifi
-        import google.protobuf
         import aiorpcx
     except ImportError as e:
         sys.exit(f"Error: {str(e)}. Try 'sudo python3 -m pip install <module-name>'")
@@ -67,11 +66,15 @@ def check_imports():
         import qrcode
     except ImportError as e:
         _logger.error(f"Error: {str(e)}. This is fine for the daemon. If you're using the GUI, try 'sudo python3 -m pip install <module-name>'")
+    try:
+        import google.protobuf
+        from google.protobuf import descriptor
+        from google.protobuf import message
+        from google.protobuf import reflection
+        from google.protobuf import descriptor_pb2
+    except ImportError as e:
+        _logger.error(f"Error: {str(e)}. This is fine if BIP70 is unneeded. If you're using BIP70, try 'sudo python3 -m pip install <module-name>'")
     # the following imports are for pyinstaller
-    from google.protobuf import descriptor
-    from google.protobuf import message
-    from google.protobuf import reflection
-    from google.protobuf import descriptor_pb2
     # make sure that certificates are here
     assert os.path.exists(certifi.where())
 
