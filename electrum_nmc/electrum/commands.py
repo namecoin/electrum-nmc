@@ -372,12 +372,12 @@ class Commands:
         return result
 
     @command('n')
-    async def getaddressunspent(self, address):
+    async def getaddressunspent(self, address, stream_id=None):
         """Returns the UTXO list of any address. Note: This
         is a walletless server query, results are not checked by SPV.
         """
         sh = bitcoin.address_to_scripthash(address)
-        return await self.network.listunspent_for_scripthash(sh)
+        return await self.network.listunspent_for_scripthash(sh, stream_id=stream_id)
 
     @command('')
     async def serialize(self, jsontx):
@@ -428,10 +428,10 @@ class Commands:
         return tx.deserialize(force_full_parse=True)
 
     @command('n')
-    async def broadcast(self, tx):
+    async def broadcast(self, tx, stream_id=None):
         """Broadcast a transaction to the network. """
         tx = Transaction(tx)
-        await self.network.broadcast_transaction(tx)
+        await self.network.broadcast_transaction(tx, stream_id=stream_id)
         return tx.txid()
 
     @command('')
@@ -497,21 +497,21 @@ class Commands:
         return out
 
     @command('n')
-    async def getaddressbalance(self, address):
+    async def getaddressbalance(self, address, stream_id=None):
         """Return the balance of any address. Note: This is a walletless
         server query, results are not checked by SPV.
         """
         sh = bitcoin.address_to_scripthash(address)
-        out = await self.network.get_balance_for_scripthash(sh)
+        out = await self.network.get_balance_for_scripthash(sh, stream_id=stream_id)
         out["confirmed"] =  str(Decimal(out["confirmed"])/COIN)
         out["unconfirmed"] =  str(Decimal(out["unconfirmed"])/COIN)
         return out
 
     @command('n')
-    async def getmerkle(self, txid, height):
+    async def getmerkle(self, txid, height, stream_id=None):
         """Get Merkle branch of a transaction included in a block. Electrum
         uses this to verify transactions (Simple Payment Verification)."""
-        return await self.network.get_merkle_for_transaction(txid, int(height))
+        return await self.network.get_merkle_for_transaction(txid, int(height), stream_id=stream_id)
 
     @command('n')
     async def getservers(self):
@@ -882,13 +882,13 @@ class Commands:
         return out
 
     @command('n')
-    async def gettransaction(self, txid, wallet: Abstract_Wallet = None):
+    async def gettransaction(self, txid, stream_id=None, wallet: Abstract_Wallet = None):
         """Retrieve a transaction. """
         tx = None
         if wallet:
             tx = wallet.db.get_transaction(txid)
         if tx is None:
-            raw = await self.network.get_transaction(txid)
+            raw = await self.network.get_transaction(txid, stream_id=stream_id)
             if raw:
                 tx = Transaction(raw)
             else:
