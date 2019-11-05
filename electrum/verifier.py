@@ -106,11 +106,14 @@ class SPV(NetworkJobOnDefaultServer):
             self.requested_merkle.add(tx_hash)
             await self.group.spawn(self._request_and_verify_single_proof, tx_hash, tx_height, use_individual_header_proof)
 
-    async def _request_and_verify_single_proof(self, tx_hash, tx_height, use_individual_header_proof=False):
+    async def _request_and_verify_single_proof(self, tx_hash, tx_height, use_individual_header_proof=False, stream_id=None):
         try:
-            merkle_getter = self.network.get_merkle_for_transaction(tx_hash, tx_height)
+            merkle_getter = self.network.get_merkle_for_transaction(tx_hash, tx_height, stream_id=stream_id)
             if use_individual_header_proof:
-                header_getter = self.network.interface.get_block_header(tx_height, 'SPV verifier', must_provide_proof=True)
+                interface = self.network.get_interface_for_stream_id(stream_id)
+                if interface is None:
+                    raise Exception("No clean interface is ready")
+                header_getter = interface.get_block_header(tx_height, 'SPV verifier', must_provide_proof=True)
                 merkle, (header, proof_was_provided) = await asyncio.gather(merkle_getter, header_getter)
             else:
                 merkle = await merkle_getter
