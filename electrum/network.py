@@ -251,6 +251,7 @@ class Network(Logger):
         self.logger.info(f"blockchains {list(map(lambda b: b.forkpoint, blockchain.blockchains.values()))}")
         self._blockchain_preferred_block = self.config.get('blockchain_preferred_block', None)  # type: Optional[Dict]
         self._blockchain = blockchain.get_best_chain()
+        self.pending_chunks = {}
         # Server for addresses and transactions
         self.default_server = self.config.get('server', None)
         # Sanitize default server

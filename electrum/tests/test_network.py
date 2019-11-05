@@ -18,6 +18,7 @@ class MockTaskGroup:
 class MockNetwork:
     main_taskgroup = MockTaskGroup()
     asyncio_loop = asyncio.get_event_loop()
+    bhi_lock = asyncio.Lock()
 
 class MockInterface(Interface):
     def __init__(self, config):
