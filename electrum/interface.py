@@ -28,6 +28,7 @@ import ssl
 import sys
 import traceback
 import asyncio
+import secrets
 import socket
 from typing import Tuple, Union, List, TYPE_CHECKING, Optional
 from collections import defaultdict
@@ -60,6 +61,15 @@ if TYPE_CHECKING:
 ca_path = certifi.where()
 
 BUCKET_NAME_OF_ONION_SERVERS = 'onion'
+
+
+# Random authentication is useful when used with Tor for stream isolation.
+class SOCKSRandomAuth(aiorpcx.socks.SOCKSUserAuth):
+    def __getitem__(self, key):
+        return secrets.token_hex(32)
+
+
+SOCKSRandomAuth.__new__.__defaults__ = (None, None)
 
 
 class NetworkTimeout:
@@ -252,7 +262,7 @@ class Interface(Logger):
         if proxy:
             username, pw, isolate = proxy.get('user'), proxy.get('password'), proxy.get('isolate')
             if isolate:
-                auth = aiorpcx.socks.SOCKSRandomAuth()
+                auth = SOCKSRandomAuth()
             elif not username or not pw:
                 auth = None
             else:
