@@ -45,6 +45,7 @@ from .bitcoin import is_address,  hash_160, COIN, TYPE_ADDRESS
 from .bip32 import BIP32Node
 from .i18n import _
 from .names import build_name_new, format_name_identifier, name_expires_in, name_identifier_to_scripthash, OP_NAME_FIRSTUPDATE, OP_NAME_UPDATE, validate_value_length
+from .network import BestEffortRequestFailed
 from .verifier import verify_tx_is_in_block
 from .transaction import Transaction, multisig_script, TxOutput
 from .paymentrequest import PR_PAID, PR_UNPAID, PR_UNKNOWN, PR_EXPIRED
@@ -1141,6 +1142,31 @@ class Commands:
                 else:
                     raise Exception("stream_id specified in both Electrum-NMC and Namecoin Core style")
 
+        if stream_id is None:
+            stream_id = ""
+
+        error_not_found = None
+        error_request_failed = None
+
+        # Try multiple times (with a different Tor circuit and different
+        # server) if the server claims that the name doesn't exist.  This
+        # improves resilience against censorship attacks.
+        for i in range(3):
+            try:
+                return self.name_show_single_try(identifier, stream_id="Electrum-NMC name_show attempt "+str(i)+": "+stream_id)
+            except NameNotFoundError as e:
+                if error_not_found is None:
+                    error_not_found = e
+            except BestEffortRequestFailed as e:
+                if error_request_failed is None:
+                    error_request_failed = e
+
+        if error_not_found is not None:
+            raise error_not_found
+        if error_request_failed is not None:
+            raise error_request_failed
+
+    def name_show_single_try(self, identifier, stream_id=None):
         # TODO: support non-ASCII encodings
         identifier_bytes = identifier.encode("ascii")
         sh = name_identifier_to_scripthash(identifier_bytes)
