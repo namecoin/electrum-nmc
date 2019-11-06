@@ -45,6 +45,7 @@ from .bitcoin import is_address,  hash_160, COIN, TYPE_ADDRESS
 from .bip32 import BIP32Node
 from .i18n import _
 from .names import build_name_new, format_name_identifier, name_expires_in, name_identifier_to_scripthash, OP_NAME_FIRSTUPDATE, OP_NAME_UPDATE, validate_value_length
+from .network import BestEffortRequestFailed
 from .verifier import verify_tx_is_in_block
 from .transaction import Transaction, multisig_script, TxOutput
 from .paymentrequest import PR_PAID, PR_UNPAID, PR_UNKNOWN, PR_EXPIRED
@@ -303,12 +304,12 @@ class Commands:
         return s
 
     @command('n')
-    async def getaddresshistory(self, address):
+    async def getaddresshistory(self, address, stream_id=None):
         """Return the transaction history of any address. Note: This is a
         walletless server query, results are not checked by SPV.
         """
         sh = bitcoin.address_to_scripthash(address)
-        return await self.network.get_history_for_scripthash(sh)
+        return await self.network.get_history_for_scripthash(sh, stream_id=stream_id)
 
     @command('w')
     async def listunspent(self, wallet: Abstract_Wallet = None):
@@ -372,12 +373,12 @@ class Commands:
         return result
 
     @command('n')
-    async def getaddressunspent(self, address):
+    async def getaddressunspent(self, address, stream_id=None):
         """Returns the UTXO list of any address. Note: This
         is a walletless server query, results are not checked by SPV.
         """
         sh = bitcoin.address_to_scripthash(address)
-        return await self.network.listunspent_for_scripthash(sh)
+        return await self.network.listunspent_for_scripthash(sh, stream_id=stream_id)
 
     @command('')
     async def serialize(self, jsontx):
@@ -428,10 +429,10 @@ class Commands:
         return tx.deserialize(force_full_parse=True)
 
     @command('n')
-    async def broadcast(self, tx):
+    async def broadcast(self, tx, stream_id=None):
         """Broadcast a transaction to the network. """
         tx = Transaction(tx)
-        await self.network.broadcast_transaction(tx)
+        await self.network.broadcast_transaction(tx, stream_id=stream_id)
         return tx.txid()
 
     @command('')
@@ -497,21 +498,21 @@ class Commands:
         return out
 
     @command('n')
-    async def getaddressbalance(self, address):
+    async def getaddressbalance(self, address, stream_id=None):
         """Return the balance of any address. Note: This is a walletless
         server query, results are not checked by SPV.
         """
         sh = bitcoin.address_to_scripthash(address)
-        out = await self.network.get_balance_for_scripthash(sh)
+        out = await self.network.get_balance_for_scripthash(sh, stream_id=stream_id)
         out["confirmed"] =  str(Decimal(out["confirmed"])/COIN)
         out["unconfirmed"] =  str(Decimal(out["unconfirmed"])/COIN)
         return out
 
     @command('n')
-    async def getmerkle(self, txid, height):
+    async def getmerkle(self, txid, height, stream_id=None):
         """Get Merkle branch of a transaction included in a block. Electrum
         uses this to verify transactions (Simple Payment Verification)."""
-        return await self.network.get_merkle_for_transaction(txid, int(height))
+        return await self.network.get_merkle_for_transaction(txid, int(height), stream_id=stream_id)
 
     @command('n')
     async def getservers(self):
@@ -689,12 +690,12 @@ class Commands:
         return tx.as_dict()
 
     @command('wp')
-    async def name_new(self, identifier, destination=None, amount=0.0, fee=None, from_addr=None, change_addr=None, nocheck=False, unsigned=False, rbf=None, password=None, locktime=None, allow_existing=False):
+    async def name_new(self, identifier, destination=None, amount=0.0, fee=None, from_addr=None, change_addr=None, nocheck=False, unsigned=False, rbf=None, password=None, locktime=None, allow_existing=False, stream_id=None):
         """Create a name_new transaction. """
         if not allow_existing:
             name_exists = True
             try:
-                show = self.name_show(identifier)
+                show = self.name_show(identifier, stream_id=stream_id)
             except NameNotFoundError:
                 name_exists = False
             if name_exists:
@@ -772,7 +773,7 @@ class Commands:
         return tx.as_dict()
 
     @command('wpn')
-    async def name_autoregister(self, identifier, value, destination=None, amount=0.0, fee=None, from_addr=None, change_addr=None, nocheck=False, rbf=None, password=None, locktime=None, allow_existing=False):
+    async def name_autoregister(self, identifier, value, destination=None, amount=0.0, fee=None, from_addr=None, change_addr=None, nocheck=False, rbf=None, password=None, locktime=None, allow_existing=False, stream_id=None):
         """Creates a name_new transaction, broadcasts it, creates a corresponding name_firstupdate transaction, and queues it. """
 
         # Validate the value before we try to pre-register the name.  That way,
@@ -781,12 +782,12 @@ class Commands:
         validate_value_length(value)
 
         # TODO: Don't hardcode the 0.005 name_firstupdate fee
-        new_result = self.name_new(identifier, amount=amount+0.005, fee=fee, from_addr=from_addr, change_addr=change_addr, nocheck=nocheck, rbf=rbf, password=password, locktime=locktime, allow_existing=allow_existing)
+        new_result = self.name_new(identifier, amount=amount+0.005, fee=fee, from_addr=from_addr, change_addr=change_addr, nocheck=nocheck, rbf=rbf, password=password, locktime=locktime, allow_existing=allow_existing, stream_id=stream_id)
         new_txid = new_result["txid"]
         new_rand = new_result["rand"]
         new_tx = new_result["tx"]["hex"]
 
-        self.broadcast(new_tx)
+        self.broadcast(new_tx, stream_id=stream_id)
 
         # We add the name_new transaction to the wallet explicitly because
         # otherwise, the wallet will only learn about the name_new once the
@@ -882,13 +883,13 @@ class Commands:
         return out
 
     @command('n')
-    async def gettransaction(self, txid, wallet: Abstract_Wallet = None):
+    async def gettransaction(self, txid, stream_id=None, wallet: Abstract_Wallet = None):
         """Retrieve a transaction. """
         tx = None
         if wallet:
             tx = wallet.db.get_transaction(txid)
         if tx is None:
-            raw = await self.network.get_transaction(txid)
+            raw = await self.network.get_transaction(txid, stream_id=stream_id)
             if raw:
                 tx = Transaction(raw)
             else:
@@ -1043,7 +1044,9 @@ class Commands:
             if trigger_name is not None:
                 # TODO: handle non-ASCII trigger_name
                 try:
-                    current_height = self.name_show(trigger_name)["height"]
+                    # TODO: Store a stream ID in the queue, so that we can be
+                    # more intelligent than using the txid.
+                    current_height = self.name_show(trigger_name, stream_id="txid: " + txid)["height"]
                     current_depth = chain_height - current_height + 1
                 except NameNotFoundError:
                     current_depth = 36000
@@ -1056,7 +1059,9 @@ class Commands:
             if current_depth >= trigger_depth:
                 tx = queue_item["tx"]
                 try:
-                    self.broadcast(tx)
+                    # TODO: Store a stream ID in the queue, so that we can be
+                    # more intelligent than using the txid.
+                    self.broadcast(tx, stream_id="txid: " + txid)
                 except Exception as e:
                     errors[txid] = str(e)
 
@@ -1128,12 +1133,45 @@ class Commands:
         return self.config.fee_per_kb(dyn=dyn, mempool=mempool, fee_level=fee_level)
 
     @command('n')
-    async def name_show(self, identifier):
+    async def name_show(self, identifier, options=None, stream_id=None):
+        # Handle Namecoin-Core-style options
+        if options is not None:
+            if "streamID" in options:
+                if stream_id is None:
+                    stream_id = options["streamID"]
+                else:
+                    raise Exception("stream_id specified in both Electrum-NMC and Namecoin Core style")
+
+        if stream_id is None:
+            stream_id = ""
+
+        error_not_found = None
+        error_request_failed = None
+
+        # Try multiple times (with a different Tor circuit and different
+        # server) if the server claims that the name doesn't exist.  This
+        # improves resilience against censorship attacks.
+        for i in range(3):
+            try:
+                return self.name_show_single_try(identifier, stream_id="Electrum-NMC name_show attempt "+str(i)+": "+stream_id)
+            except NameNotFoundError as e:
+                if error_not_found is None:
+                    error_not_found = e
+            except BestEffortRequestFailed as e:
+                if error_request_failed is None:
+                    error_request_failed = e
+
+        if error_not_found is not None:
+            raise error_not_found
+        if error_request_failed is not None:
+            raise error_request_failed
+
+    def name_show_single_try(self, identifier, stream_id=None):
         # TODO: support non-ASCII encodings
         identifier_bytes = identifier.encode("ascii")
         sh = name_identifier_to_scripthash(identifier_bytes)
 
-        txs = self.network.run_from_another_thread(self.network.get_history_for_scripthash(sh))
+        txs = self.network.run_from_another_thread(self.network.get_history_for_scripthash(sh, stream_id=stream_id))
 
         # Check the blockchain height (local and server chains)
         local_chain_height = self.network.get_local_height()
@@ -1181,39 +1219,8 @@ class Commands:
 
         # The height is now verified to be safe.
 
-        # (from verifier._request_proofs) if it's in the checkpoint region, we still might not have the header
-        header = self.network.blockchain().read_header(height)
-        if header is None:
-            if height < constants.net.max_checkpoint():
-                self.network.run_from_another_thread(self.network.request_chunk(height, None))
-
-        # (from verifier._request_and_verify_single_proof)
-        merkle = self.network.run_from_another_thread(self.network.get_merkle_for_transaction(txid, height))
-        if height != merkle.get('block_height'):
-            raise Exception('requested height {} differs from received height {} for txid {}'
-                            .format(height, merkle.get('block_height'), txid))
-        pos = merkle.get('pos')
-        merkle_branch = merkle.get('merkle')
-        async def wait_for_header():
-            # we need to wait if header sync/reorg is still ongoing, hence lock:
-            async with self.network.bhi_lock:
-                return self.network.blockchain().read_header(height)
-        header = self.network.run_from_another_thread(wait_for_header())
-        verify_tx_is_in_block(txid, merkle_branch, pos, header, height)
-
-        # The txid is now verified to come from a safe height in the blockchain.
-
-        if self.wallet and txid in self.wallet.db.transactions:
-            tx = self.wallet.db.transactions[txid]
-        else:
-            raw = self.network.run_from_another_thread(self.network.get_transaction(txid))
-            if raw:
-                tx = Transaction(raw)
-            else:
-                raise Exception("Unknown transaction")
-
-        if tx.txid() != txid:
-            raise Exception("txid mismatch")
+        raw = self.gettransaction(txid, verify=True, height=height, stream_id=stream_id)['hex']
+        tx = Transaction(raw)
 
         # the tx is now verified to come from a safe height in the blockchain
 
@@ -1419,6 +1426,7 @@ command_options = {
     'fee_level':   (None, "Float between 0.0 and 1.0, representing fee slider position"),
     'from_height': (None, "Only show transactions that confirmed after given block height"),
     'to_height':   (None, "Only show transactions that confirmed before given block height"),
+    'stream_id':   (None, "Stream-isolate the network connection using this stream ID (only used with Tor)"),
     'destination': (None, "Namecoin address, contact or alias"),
     'amount':      (None, "Amount to be sent (in NMC). Type \'!\' to send the maximum available."),
     'allow_existing': (None, "Allow pre-registering a name that already is registered.  Your registration fee will be forfeited until you can register the name after it expires."),
@@ -1427,6 +1435,7 @@ command_options = {
     'value':       (None, "The value to assign to the name"),
     'trigger_txid':(None, "Broadcast the transaction when this txid reaches the specified number of confirmations"),
     'trigger_name':(None, "Broadcast the transaction when this name reaches the specified number of confirmations"),
+    'options':     (None, "Options in Namecoin-Core-style dict"),
 }
 
 
