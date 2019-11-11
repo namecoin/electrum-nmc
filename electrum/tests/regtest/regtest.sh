@@ -148,7 +148,9 @@ if [[ $1 == "breach" ]]; then
     wait_for_balance alice 1
     echo "alice opens channel"
     bob_node=$($bob nodeid)
+    echo "Alice info: $($alice getinfo)"
     echo "Alice balance: $($alice getbalance)"
+    echo "Bob info: $($bob getinfo)"
     echo "Bob balance: $($bob getbalance)"
     sleep 20
     echo "Alice opening channel to Bob..."
