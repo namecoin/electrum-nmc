@@ -150,6 +150,7 @@ if [[ $1 == "breach" ]]; then
     bob_node=$($bob nodeid)
     echo "Alice balance: $($alice getbalance)"
     echo "Bob balance: $($bob getbalance)"
+    sleep 20
     echo "Alice opening channel to Bob..."
     channel=$($alice open_channel $bob_node 0.15)
     new_blocks 3
