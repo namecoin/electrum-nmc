@@ -155,7 +155,9 @@ if [[ $1 == "breach" ]]; then
     sleep 20
     echo "Alice opening channel to Bob..."
     channel=$($alice open_channel $bob_node 0.15)
+    echo "Instructed Alice to open channel to Bob; mining 3 new blocks..."
     new_blocks 3
+    echo "Waiting for Alice's channel to open..."
     wait_until_channel_open alice
     echo "Bob adding lightning request 1"
     request=$($bob add_lightning_request 0.01 -m "blah")
