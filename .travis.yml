@@ -40,7 +40,7 @@ jobs:
           - electrum_nmc/electrum/tests/regtest/start_bitcoind.sh
           - electrum_nmc/electrum/tests/regtest/start_electrumx.sh
       script:
-        - tail -f ~/.namecoin/regtest/debug.log & PYTHONPATH=$PYTHONPATH:$(pwd)/electrum_nmc python -m unittest electrum_nmc/electrum/tests/regtest.py
+        - tail -f ~/.namecoin/regtest/debug.log & tail --retry -f ~/electrumx.log & PYTHONPATH=$PYTHONPATH:$(pwd)/electrum_nmc python -m unittest electrum_nmc/electrum/tests/regtest.py
       after_success: True
     - name: "Flake8 linter tests"
       language: python
