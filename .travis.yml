@@ -36,7 +36,7 @@ jobs:
           - electrum/tests/regtest/start_bitcoind.sh
           - electrum/tests/regtest/start_electrumx.sh
       script:
-        - tail -f ~/.bitcoin/regtest/debug.log & python -m unittest electrum/tests/regtest.py
+        - tail -f ~/.bitcoin/regtest/debug.log & tail --retry -f ~/electrumx.log & python -m unittest electrum/tests/regtest.py
       after_success: True
     - name: "Flake8 linter tests"
       language: python
