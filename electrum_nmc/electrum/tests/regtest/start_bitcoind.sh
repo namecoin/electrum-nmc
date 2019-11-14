@@ -23,3 +23,9 @@ screen -S namecoind -m -d namecoind -regtest
 sleep 6
 addr=$(namecoin-cli getnewaddress)
 namecoin-cli generatetoaddress 150 $addr > /dev/null
+
+# Namecoin Core 0.18.0 activates SegWit on Regtest at height 432.  So we need
+# to be at least that height for SegWit transactions to be mined.
+# TODO: Remove this after we migrate the Regtest Travis job to a newer Namecoin
+# Core.
+namecoin-cli generatetoaddress 450 $addr > /dev/null
