@@ -11,9 +11,11 @@ rpcpassword=donkey
 rpcallowip=127.0.0.1
 zmqpubrawblock=tcp://127.0.0.1:28332
 zmqpubrawtx=tcp://127.0.0.1:28333
+debug=1
 [regtest]
 rpcbind=0.0.0.0
 rpcport=18554
+debug=1
 EOF
 rm -rf ~/.namecoin/regtest
 screen -S namecoind -X quit || true
