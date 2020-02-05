@@ -18,6 +18,7 @@ class MockTaskGroup:
 class MockNetwork:
     main_taskgroup = MockTaskGroup()
     asyncio_loop = asyncio.get_event_loop()
+    bhi_lock = asyncio.Lock()
 
 class MockInterface(Interface):
     def __init__(self, config):
@@ -30,13 +31,13 @@ class MockInterface(Interface):
                                                 parent=None, forkpoint_hash=constants.net.GENESIS, prev_hash=None)
         self.tip = 12
         self.blockchain._size = self.tip + 1
-    async def get_block_header(self, height, assert_mode):
+    async def get_block_header(self, height, assert_mode, must_provide_proof=False):
         assert self.q.qsize() > 0, (height, assert_mode)
         item = await self.q.get()
         print("step with height", height, item)
         assert item['block_height'] == height, (item['block_height'], height)
         assert assert_mode in item['mock'], (assert_mode, item)
-        return item
+        return item, False
 
 class TestNetwork(ElectrumTestCase):
 

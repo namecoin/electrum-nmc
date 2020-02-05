@@ -251,6 +251,7 @@ class Network(Logger):
         self.logger.info(f"blockchains {list(map(lambda b: b.forkpoint, blockchain.blockchains.values()))}")
         self._blockchain_preferred_block = self.config.get('blockchain_preferred_block', None)  # type: Optional[Dict]
         self._blockchain = blockchain.get_best_chain()
+        self.pending_chunks = {}
         # Server for addresses and transactions
         self.default_server = self.config.get('server', None)
         # Sanitize default server
@@ -828,7 +829,7 @@ class Network(Logger):
     async def _init_headers_file(self):
         b = blockchain.get_best_chain()
         filename = b.path()
-        length = HEADER_SIZE * len(constants.net.CHECKPOINTS) * 2016
+        length = HEADER_SIZE * constants.net.max_checkpoint()
         if not os.path.exists(filename) or os.path.getsize(filename) < length:
             with open(filename, 'wb') as f:
                 if length > 0:
@@ -1141,14 +1142,6 @@ class Network(Logger):
 
     def get_local_height(self):
         return self.blockchain().height()
-
-    def export_checkpoints(self, path):
-        """Run manually to generate blockchain checkpoints.
-        Kept for console use only.
-        """
-        cp = self.blockchain().get_checkpoints()
-        with open(path, 'w', encoding='utf-8') as f:
-            f.write(json.dumps(cp, indent=4))
 
     async def _start(self):
         assert not self.main_taskgroup
