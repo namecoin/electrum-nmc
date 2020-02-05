@@ -59,22 +59,24 @@ def check_imports():
         import pyaes
         import ecdsa
         import certifi
-        import qrcode
-        import google.protobuf
         import aiorpcx
     except ImportError as e:
         sys.exit(f"Error: {str(e)}. Try 'sudo python3 -m pip install <module-name>'")
+    try:
+        import qrcode
+    except ImportError as e:
+        _logger.error(f"Error: {str(e)}. This is fine for the daemon. If you're using the GUI, try 'sudo python3 -m pip install <module-name>'")
+    try:
+        import google.protobuf
+        from google.protobuf import descriptor
+        from google.protobuf import message
+        from google.protobuf import reflection
+        from google.protobuf import descriptor_pb2
+    except ImportError as e:
+        _logger.error(f"Error: {str(e)}. This is fine if BIP70 is unneeded. If you're using BIP70, try 'sudo python3 -m pip install <module-name>'")
     # the following imports are for pyinstaller
-    from google.protobuf import descriptor
-    from google.protobuf import message
-    from google.protobuf import reflection
-    from google.protobuf import descriptor_pb2
     # make sure that certificates are here
     assert os.path.exists(certifi.where())
-
-
-if not is_android:
-    check_imports()
 
 
 from electrum.logging import get_logger, configure_logging
@@ -82,7 +84,7 @@ from electrum import util
 from electrum import constants
 from electrum import SimpleConfig
 from electrum.wallet import Wallet
-from electrum.storage import WalletStorage, get_derivation_used_for_hw_device_encryption
+from electrum.storage import WalletStorage
 from electrum.util import print_msg, print_stderr, json_encode, json_decode, UserCancelled
 from electrum.util import InvalidPassword
 from electrum.commands import get_parser, known_commands, Commands, config_variables
@@ -91,6 +93,9 @@ from electrum import keystore
 from electrum.util import create_and_start_event_loop
 
 _logger = get_logger(__name__)
+
+if not is_android:
+    check_imports()
 
 
 # get password routine
@@ -189,6 +194,7 @@ def get_password_for_hw_device_encrypted_storage(plugins):
     # FIXME we use the "first" device, in case of multiple ones
     name, device_info = devices[0]
     plugin = plugins.get_plugin(name)
+    from electrum.storage import get_derivation_used_for_hw_device_encryption
     derivation = get_derivation_used_for_hw_device_encryption()
     try:
         xpub = plugin.get_xpub(device_info.device.id_, derivation, 'standard', plugin.handler)

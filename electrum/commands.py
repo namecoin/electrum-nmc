@@ -47,8 +47,6 @@ from .i18n import _
 from .transaction import Transaction, multisig_script, TxOutput
 from .paymentrequest import PR_PAID, PR_UNPAID, PR_UNKNOWN, PR_EXPIRED
 from .synchronizer import Notifier
-from .wallet import Abstract_Wallet, create_new_wallet, restore_wallet_from_text
-from .address_synchronizer import TX_HEIGHT_LOCAL
 from .mnemonic import Mnemonic
 from .lnutil import SENT, RECEIVED
 from .lnpeer import channel_id_from_funding_tx
@@ -56,6 +54,12 @@ from .plugin import run_hook
 from .version import ELECTRUM_VERSION
 from .simple_config import SimpleConfig
 
+
+try:
+    from .wallet import Abstract_Wallet, create_new_wallet, restore_wallet_from_text
+    from .address_synchronizer import TX_HEIGHT_LOCAL
+except ImportError:
+    pass
 
 if TYPE_CHECKING:
     from .network import Network
