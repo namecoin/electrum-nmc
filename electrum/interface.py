@@ -351,6 +351,14 @@ class Interface(Logger):
                 self.logger.warning(f"disconnecting due to {repr(e)}")
                 self.logger.debug(f"(disconnect) trace for {repr(e)}", exc_info=True)
             finally:
+                # Cancel any chunks that were pending, otherwise chain sync
+                # will get stuck.
+                async with self.network.bhi_lock:
+                    canceled_pending_chunks = [index for index in self.network.pending_chunks if "interface" in self.network.pending_chunks[index] and self.network.pending_chunks[index]["interface"] == self]
+                    for index in canceled_pending_chunks:
+                        self.logger.info(f"Canceling pending chunk {index} due to disconnect")
+                        del self.network.pending_chunks[index]
+
                 await self.network.connection_down(self)
                 if not self.got_disconnected.done():
                     self.got_disconnected.set_result(1)
@@ -523,7 +531,7 @@ class Interface(Logger):
                 if tip is not None and ahead_index * 2016 > tip:
                     await asyncio.sleep(0.005)
                     continue
-                self.network.pending_chunks[str(ahead_index)] = {}
+                self.network.pending_chunks[str(ahead_index)] = {'interface': self}
 
             if can_return_early and ahead_index in self._requested_chunks:
                 return
