@@ -37,10 +37,11 @@ from functools import wraps, partial
 from itertools import repeat
 from decimal import Decimal
 from typing import Optional, TYPE_CHECKING, Dict, List
+from math import ceil
 
 from .import util, ecc
 from .util import bfh, bh2u, format_satoshis, json_decode, json_encode, is_hash256_str, is_hex_str, to_bytes, timestamp_to_datetime
-from .util import standardize_path
+from .util import standardize_path, NotEnoughFunds
 from . import bitcoin
 from .bitcoin import is_address,  hash_160, COIN
 from .bip32 import BIP32Node
@@ -947,6 +948,125 @@ class Commands:
             raise e
 
         await self.broadcast(new_tx)
+
+    @command('wp')
+    async def name_autorenew(self, identifier, blocks_to_renew, blocks_before_expire, value=None, amount=0.0, fee=None, feerate=None, from_addr=None, from_coins=None, change_addr=None, nocheck=False, rbf=None, password=None, locktime=None, wallet: Abstract_Wallet = None):
+        """Queues a sequence of name_update (renewal) transactions for a name."""
+        blocks_between_renewals = constants.net.NAME_EXPIRATION - blocks_before_expire
+        renewals_count = ceil(blocks_to_renew / blocks_between_renewals)
+
+        list_results = await self.name_list(identifier, wallet=wallet)
+        list_results = list_results[0]
+
+        # Allow renewing a name without any value changes by omitting the
+        # value.
+        renew = False
+        if value is None:
+            # This check is in place to prevent an attack where an ElectrumX
+            # server supplies an unconfirmed name_update transaction with a
+            # malicious value and then tricks the wallet owner into signing a
+            # name renewal with that malicious value.  expires_in is None when
+            # the transaction has 0 confirmations.
+            expires_in = list_results["expires_in"]
+            if expires_in is None or expires_in > constants.net.NAME_EXPIRATION - 12:
+                raise NameUpdatedTooRecentlyError("Name was updated too recently to safely determine current value.  Either wait or specify an explicit value.")
+
+            value = list_results["value"]
+            renew = True
+
+        # Construct name op (it's always the same for each update)
+        # TODO: support non-ASCII encodings
+        # TODO: enforce length limits on identifier and value
+        identifier_bytes = identifier.encode("ascii")
+        value_bytes = value.encode("ascii")
+        name_op = {"op": OP_NAME_UPDATE, "name": identifier_bytes, "value": value_bytes}
+
+        # Construct memo for initial update
+        memo = ("Renew: " if renew else "Update: ") + format_name_identifier(identifier_bytes)
+
+        # Get addresses for each renewal
+        destinations = []
+        for i in range(renewals_count):
+            # TODO: make request persist longer duration
+            request = await self.add_request(None, memo=memo, wallet=wallet)
+            destinations.append(request['address'])
+            # After the initial update, it's always a renew
+            memo = "Renew: " + format_name_identifier(identifier_bytes)
+
+        # Create the renewal transactions
+        extra_input_amount = 0.0
+        extra_input_present = False
+        init_address = list_results["address"]
+        init_txid = list_results["txid"]
+        while True:
+            renew_txs = []
+            try:
+                for i in range(renewals_count):
+                    if i == 0:
+                        if extra_input_present:
+                            domain = from_addr
+                            domain_coins = from_coins
+                            amount = extra_input_amount
+                        else:
+                            domain = init_address
+                            domain_coins = None
+                            amount = "!"
+                    else:
+                        domain = destinations[i-1]
+                        domain_coins = None
+                        amount = "!"
+
+                    next_renew_tx = await self.name_update(identifier,
+                                                     value=value,
+                                                     destination=destinations[i],
+                                                     amount=amount,
+                                                     fee=fee,
+                                                     feerate=feerate,
+                                                     from_addr=domain,
+                                                     from_coins=domain_coins,
+                                                     change_addr=change_addr,
+                                                     nocheck=nocheck,
+                                                     rbf=rbf,
+                                                     password=password,
+                                                     locktime=locktime, # TODO
+                                                     wallet=wallet)
+                    renew_txs.append(next_renew_tx)
+                    status = await self.addtransaction(next_renew_tx, wallet=wallet)
+                    if not status:
+                        raise Exception("Error adding name pre-registration to wallet")
+            except NotEnoughFunds:
+                extra_input_amount += 0.005
+                extra_input_present = True
+                for tx_remove in renew_txs:
+                    txid_remove = Transaction(tx_remove).txid()
+                    await self.removelocaltx(txid_remove, wallet=wallet)
+                continue
+            except Exception as e:
+                for tx_remove in renew_txs:
+                    txid_remove = Transaction(tx_remove).txid()
+                    await self.removelocaltx(txid_remove, wallet=wallet)
+                raise e
+
+            break
+
+        # Delete the transactions from the main wallet, since they haven't
+        # taken effect yet.
+        for tx_remove in renew_txs:
+            txid_remove = Transaction(tx_remove).txid()
+            await self.removelocaltx(txid_remove, wallet=wallet)
+
+        # TODO: delete all existing queued updates for this name
+
+        if extra_input_present:
+            await self.broadcast(renew_txs[0])
+        else:
+            await self.queuetransaction(renew_txs[0], blocks_between_renewals, trigger_txid=init_txid, wallet=wallet)
+
+        prev_txid = Transaction(renew_txs[0]).txid()
+
+        for renew_tx in renew_txs[1:]:
+            await self.queuetransaction(renew_tx, blocks_between_renewals, trigger_txid=prev_txid, wallet=wallet)
+            prev_txid = Transaction(renew_tx).txid()
 
     @command('w')
     async def onchain_history(self, year=None, show_addresses=False, show_fiat=False, wallet: Abstract_Wallet = None):
