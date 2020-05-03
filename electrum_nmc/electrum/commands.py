@@ -930,7 +930,7 @@ class Commands:
                                                        new_txid,
                                                        value,
                                                        destination=destination,
-                                                       amount=amount,
+                                                       amount="!",
                                                        fee=fee,
                                                        feerate=feerate,
                                                        from_addr=new_addr,
