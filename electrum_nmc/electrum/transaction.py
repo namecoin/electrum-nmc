@@ -41,7 +41,7 @@ import binascii
 
 from . import ecc, bitcoin, constants, segwit_addr, bip32
 from .bip32 import BIP32Node
-from .util import profiler, to_bytes, bh2u, bfh, chunks, is_hex_str
+from .util import profiler, to_bytes, bh2u, bfh, chunks, is_hex_str, NotEnoughFunds
 from .bitcoin import (TYPE_ADDRESS, TYPE_SCRIPT, hash_160,
                       hash160_to_p2sh, hash160_to_p2pkh, hash_to_segwit_addr,
                       var_int, TOTAL_COIN_SUPPLY_LIMIT_IN_BTC, COIN,
@@ -187,6 +187,15 @@ class TxOutput:
         # Name ops include an extra 0.01 NMC locked inside the output, which we
         # add here.
         self.value = value + COIN // 100
+
+    def validate_value(self):
+        value_display = self.value_display
+
+        if isinstance(value_display, str):
+            return
+
+        if value_display < 0:
+            raise NotEnoughFunds("Name output below minimum amount")
 
     def __repr__(self):
         return f"<TxOutput script={self.scriptpubkey.hex()} address={self.address} value={self.value}>"
@@ -633,6 +642,10 @@ class Transaction:
         if self._outputs is None:
             self.deserialize()
         return self._outputs
+
+    def validate_value(self):
+        for o in self.outputs():
+            o.validate_value()
 
     # If expect_trailing_data == True, returns start position (in bytes) of
     # trailing data.

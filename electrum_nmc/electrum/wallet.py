@@ -1169,6 +1169,7 @@ class Abstract_Wallet(AddressSynchronizer, ABC):
                 raise NotEnoughFunds()
             outputs[i_max].value = amount
             tx = PartialTransaction.from_io(list(coins), list(outputs))
+            tx.validate_value()
 
         # Timelock tx to current height.
         tx.locktime = get_locktime_for_new_transaction(self.network)
