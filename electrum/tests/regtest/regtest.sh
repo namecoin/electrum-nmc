@@ -68,7 +68,12 @@ if [[ $# -eq 0 ]]; then
 fi
 
 if [[ $1 == "new_block" ]]; then
+    echo "Mining the funding transactions"
     new_blocks 1
+    echo "Alice and Carol funding transactions mined"
+    echo "Alice balance: $($alice getbalance)"
+    echo "Bob balance: $($bob getbalance)"
+    echo "Carol balance: $($carol getbalance)"
 fi
 
 if [[ $1 == "init" ]]; then
@@ -85,6 +90,7 @@ if [[ $1 == "init" ]]; then
     else
         echo "funding $2"
         $bitcoin_cli sendtoaddress $($agent getunusedaddress -o) 1
+        echo "funded $2"
     fi
 fi
 
