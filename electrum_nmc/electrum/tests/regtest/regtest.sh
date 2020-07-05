@@ -142,7 +142,7 @@ fi
 
 
 if [[ $1 == "breach" ]]; then
-    tail -f /tmp/alice/regtest/logs/*.log &
+    #tail -f /tmp/alice/regtest/logs/*.log &
     wait_for_balance alice 1
     echo "alice opens channel"
     bob_node=$($bob nodeid)
