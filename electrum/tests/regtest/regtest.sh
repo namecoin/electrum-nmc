@@ -142,14 +142,19 @@ if [[ $1 == "breach" ]]; then
     wait_for_balance alice 1
     echo "alice opens channel"
     bob_node=$($bob nodeid)
+    echo "Alice balance: $($alice getbalance)"
+    echo "Bob balance: $($bob getbalance)"
+    echo "Alice opening channel to Bob..."
     channel=$($alice open_channel $bob_node 0.15)
     new_blocks 3
     wait_until_channel_open alice
+    echo "Bob adding lightning request 1"
     request=$($bob add_lightning_request 0.01 -m "blah")
     echo "alice pays"
     $alice lnpay $request
     sleep 2
     ctx=$($alice get_channel_ctx $channel --iknowwhatimdoing)
+    echo "Bob adding lightning request 2"
     request=$($bob add_lightning_request 0.01 -m "blah2")
     echo "alice pays again"
     $alice lnpay $request
