@@ -25,6 +25,7 @@ class TestLightning(unittest.TestCase):
         # extra configuration (optional)
         self.run_shell(['configure_' + test_name])
         # start daemons
+        print("setUp start")
         for agent in self.agents:
             self.run_shell(['start', agent])
 
