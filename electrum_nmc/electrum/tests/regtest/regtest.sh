@@ -71,9 +71,6 @@ if [[ $1 == "new_block" ]]; then
     echo "Mining the funding transactions"
     new_blocks 1
     echo "Alice and Carol funding transactions mined"
-    echo "Alice balance: $($alice getbalance)"
-    echo "Bob balance: $($bob getbalance)"
-    echo "Carol balance: $($carol getbalance)"
 fi
 
 if [[ $1 == "init" ]]; then
