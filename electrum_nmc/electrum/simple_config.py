@@ -31,7 +31,8 @@ FEERATE_DEFAULT_RELAY = 1000 * 100
 FEERATE_MAX_RELAY = 50000 * 100
 FEERATE_STATIC_VALUES = [1000 * 100, 2000 * 100, 5000 * 100, 10000 * 100, 20000 * 100, 30000 * 100,
                          50000 * 100, 70000 * 100, 100000 * 100, 150000 * 100, 200000 * 100, 300000 * 100]
-FEERATE_REGTEST_HARDCODED = 180000 * 100  # for eclair compat
+# Regtest feerate doesn't need Namecoin's 100x adjustment.
+FEERATE_REGTEST_HARDCODED = 180000  # for eclair compat
 
 
 _logger = get_logger(__name__)
