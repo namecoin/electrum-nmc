@@ -179,6 +179,7 @@ if [[ $1 == "breach" ]]; then
     new_blocks 1
     wait_for_balance bob 0.14
     $bob getbalance
+    echo "breach: bob balance reached 0.14"
 fi
 
 if [[ $1 == "redeem_htlcs" ]]; then
