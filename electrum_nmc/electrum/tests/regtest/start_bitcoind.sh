@@ -28,4 +28,5 @@ namecoin-cli generatetoaddress 150 $addr > /dev/null
 # to be at least that height for SegWit transactions to be mined.
 # TODO: Remove this after we migrate the Regtest Travis job to a newer Namecoin
 # Core.
-namecoin-cli generatetoaddress 450 $addr > /dev/null
+# UPDATE: This is removed since Namecoin Core is now 0.19.0.
+#namecoin-cli generatetoaddress 450 $addr > /dev/null
