@@ -549,6 +549,9 @@ class Interface(Logger):
             res = await self.session.send_request('blockchain.block.headers', [index * 2016, size, cp_height])
         finally:
             self._requested_chunks.discard(index)
+        
+        if 'headers' in res:
+            res['hex'] = "".join(res['headers'])
         conn = self.blockchain.connect_chunk(index, res['hex'])
         if not conn:
             return conn, 0
