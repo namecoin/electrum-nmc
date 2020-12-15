@@ -16,7 +16,7 @@ from electrum.wallet import Standard_Wallet
 from electrum.util import bfh, bh2u, versiontuple, UserFacingException
 from electrum.base_wizard import ScriptTypeNotSupported
 from electrum.logging import get_logger
-from electrum.plugin import runs_in_hwd_thread, Device
+from electrum.plugin import Device
 from ..hw_wallet import HW_PluginBase, HardwareClientBase
 from ..hw_wallet.plugin import is_any_tx_output_on_change_branch, validate_op_return_output
 
@@ -635,7 +635,6 @@ class LedgerPlugin(HW_PluginBase):
             return None
         return device
 
-    @runs_in_hwd_thread
     def get_btchip_device(self, device):
         ledger = False
         if device.product_key[0] == 0x2581 and device.product_key[1] == 0x3b7c:
