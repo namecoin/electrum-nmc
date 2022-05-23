@@ -1145,7 +1145,7 @@
        <item>
         <widget class="QLabel" name="labelOfTotal">
          <property name="text">
-          <string>/ 520</string>
+          <string>/ 1023</string>
          </property>
         </widget>
        </item>
