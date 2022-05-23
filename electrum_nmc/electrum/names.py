@@ -125,7 +125,7 @@ def validate_identifier_length(identifier):
         raise BitcoinException('identifier length {} exceeds limit of {}'.format(identifier_length, identifier_length_limit))
 
 def validate_value_length(value):
-    value_length_limit = 520
+    value_length_limit = 1023
 
     value_length = len(value)
     if value_length > value_length_limit:
