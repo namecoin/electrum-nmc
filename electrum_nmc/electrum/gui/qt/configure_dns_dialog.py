@@ -654,7 +654,7 @@ class ConfigureDNSDialog(QDialog, MessageBoxMixin):
         usage = len(value)
         usage_text = str(usage)
 
-        if usage > 520:
+        if usage > 1023:
             usage_text = "<span style='color: red;'>\u26A0 " + usage_text + "</span>"
 
         label = self.ui.labelBytes
