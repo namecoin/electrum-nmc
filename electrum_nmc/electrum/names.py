@@ -254,13 +254,13 @@ def format_name_identifier_identity(identifier: str) -> FormattedNameIdentifier:
 def format_name_identifier_unknown(identifier: str) -> FormattedNameIdentifier:
     # Check for non-printable characters, and print ASCII if none are found.
     if identifier.isprintable():
-        return FormattedNameIdentifier("Non-standard name", f"'{identifier}'")
+        return FormattedNameIdentifier(f"'{identifier}'")
 
     return format_name_identifier_unknown_hex(identifier.encode("ascii"))
 
 
 def format_name_identifier_unknown_hex(identifier_bytes: bytes) -> FormattedNameIdentifier:
-    return FormattedNameIdentifier("Non-standard name", "0x" + bh2u(identifier_bytes))
+    return FormattedNameIdentifier("0x" + bh2u(identifier_bytes))
 
 
 def format_name_value(value_bytes: bytes) -> str:
