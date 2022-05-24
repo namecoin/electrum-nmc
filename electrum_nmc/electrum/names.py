@@ -558,7 +558,7 @@ def get_domain_records(domain, value):
     if "alias" in value:
         new_records, value["alias"] = get_domain_records_cname(domain, value["alias"])
         records.extend(new_records)
-        if value["alias"] == None:
+        if value["alias"] is None:
             del value["alias"]
 
     if "ns" in value:
@@ -641,13 +641,13 @@ def get_domain_records_address(domain, value):
     if "freenet" in value:
         new_records, value["freenet"] = get_domain_records_address_freenet(domain, value["freenet"])
         records.extend(new_records)
-        if value["freenet"] == None:
+        if value["freenet"] is None:
             del value["freenet"]
 
     if "zeronet" in value:
         new_records, value["zeronet"] = get_domain_records_address_zeronet(domain, value["zeronet"])
         records.extend(new_records)
-        if value["zeronet"] == None:
+        if value["zeronet"] is None:
             del value["zeronet"]
 
     return records, value
@@ -787,7 +787,7 @@ def get_domain_records_address_zeronet(domain, value):
     # Parse the old-style dict ZeroNet format
     if type(value) == dict:
         for label in value:
-            # Make sure the ZeroNet value is a string, bail if it's not
+            # Make sure the ZeroNet value is a string, fail if it's not
             if type(value[label]) != str:
                 return [], value
 
