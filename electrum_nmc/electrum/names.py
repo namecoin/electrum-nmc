@@ -289,7 +289,7 @@ def format_name_op(name_op) -> str:
     if "name" in name_op:
         formatted_name = "Name = " + format_name_identifier(name_op["name"])
     if "value" in name_op:
-        formatted_value = "Data = " + format_name_value(name_op["value"])
+        formatted_value = "Value = " + format_name_value(name_op["value"])
 
     if name_op["op"] == OP_NAME_NEW:
         return "\tPre-Registration\n\t\t" + formatted_commitment
