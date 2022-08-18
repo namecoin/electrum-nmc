@@ -2142,6 +2142,8 @@ class Abstract_Wallet(AddressSynchronizer, ABC):
             coins = [coin for coin in coins if (coin.prevout.to_str() in domain_coins)]
         name_coins = self.get_spendable_coins(name_txid_domain, include_names=True, only_uno_txids=name_input_txids)
         name_coins += self.get_spendable_coins(name_identifier_domain, include_names=True, only_uno_identifiers=name_input_identifiers)
+        if len(name_coins) != len(name_input_txids) + len(name_input_identifiers):
+            raise Exception("Name input not spendable in wallet")
         if feerate is not None:
             fee_per_kb = 1000 * Decimal(feerate)
             fee_estimator = partial(SimpleConfig.estimate_fee_for_feerate, fee_per_kb)
