@@ -370,11 +370,17 @@ def get_default_name_tx_label(wallet, tx) -> Optional[str]:
             if not name_input_is_mine and not name_output_is_mine:
                 return None
             if name_input_is_mine and not name_output_is_mine:
+                is_relevant, is_mine, amount, fee = wallet.get_wallet_delta(tx)
+                if amount > 0:
+                    return "Sale: " + format_name_identifier(name_op["name"])
                 return "Transfer (Outgoing): " + format_name_identifier(name_op["name"])
             if not name_input_is_mine and name_output_is_mine:
                 # A name_new transaction isn't expected to have a name input,
                 # so we don't consider it a transfer.
                 if name_op["op"] != OP_NAME_NEW:
+                    is_relevant, is_mine, amount, fee = wallet.get_wallet_delta(tx)
+                    if amount < 0:
+                        return "Purchase: " + format_name_identifier(name_op["name"])
                     return "Transfer (Incoming): " + format_name_identifier(name_op["name"])
             if name_op["op"] == OP_NAME_NEW:
                 # Get the address where the NAME_NEW was sent to

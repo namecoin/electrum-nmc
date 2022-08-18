@@ -1879,6 +1879,11 @@ class PartialTransaction(Transaction):
 
     def BIP69_sort(self, inputs=True, outputs=True):
         # NOTE: other parts of the code rely on these sorts being *stable* sorts
+        # Don't sort if any of the inputs are SIGHASH_SINGLE, since re-ordering
+        # those will change semantics.
+        # TODO: Sort the non-SINGLE inputs/outputs even if some are SINGLE.
+        if any([(i.sighash is not None and i.sighash & Sighash.SINGLE) for i in self.inputs()]):
+            return
         if inputs:
             self._inputs.sort(key = lambda i: (i.prevout.txid, i.prevout.out_idx))
         if outputs:

@@ -1157,7 +1157,7 @@ class Abstract_Wallet(AddressSynchronizer, ABC):
 
     def make_unsigned_transaction(self, *, coins: Sequence[PartialTxInput],
                                   outputs: List[PartialTxOutput], fee=None,
-                                  change_addr: str = None, is_sweep=False, name_inputs=[]) -> PartialTransaction:
+                                  change_addr: str = None, is_sweep=False, name_inputs: Sequence[PartialTxInput] = []) -> PartialTransaction:
 
         if any([c.already_has_some_signatures() for c in coins]):
             raise Exception("Some inputs already contain signatures!")
@@ -2120,7 +2120,7 @@ class Abstract_Wallet(AddressSynchronizer, ABC):
 
     def create_transaction(self, outputs, *, fee=None, feerate=None, change_addr=None, domain_addr=None, domain_coins=None,
               unsigned=False, rbf=None, password=None, locktime=None,
-              name_input_txids=[], name_input_identifiers=[]):
+              name_input_txids=[], name_input_identifiers=[], name_inputs_raw=[]):
         if fee is not None and feerate is not None:
             raise Exception("Cannot specify both 'fee' and 'feerate' at the same time!")
 
@@ -2144,6 +2144,7 @@ class Abstract_Wallet(AddressSynchronizer, ABC):
         name_coins += self.get_spendable_coins(name_identifier_domain, include_names=True, only_uno_identifiers=name_input_identifiers)
         if len(name_coins) != len(name_input_txids) + len(name_input_identifiers):
             raise Exception("Name input not spendable in wallet")
+        name_coins = name_inputs_raw + name_coins
         if feerate is not None:
             fee_per_kb = 1000 * Decimal(feerate)
             fee_estimator = partial(SimpleConfig.estimate_fee_for_feerate, fee_per_kb)
