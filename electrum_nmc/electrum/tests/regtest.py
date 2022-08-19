@@ -70,6 +70,9 @@ class TestNamecoinABDefaultSeed(TestLightning):
     def test_name_autoregister(self):
         self.run_shell(['name_autoregister'])
 
+    def test_name_ant_workflow(self):
+        self.run_shell(['name_ant_workflow'])
+
 
 class TestNamecoinABSegwitSeed(TestNamecoinABDefaultSeed):
     create_opts = "--seed_type segwit"
