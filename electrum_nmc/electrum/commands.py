@@ -49,7 +49,7 @@ from .names import build_name_commitment, build_name_new, Encoding, format_name_
 from .network import BestEffortRequestFailed
 from .verifier import verify_tx_is_in_block
 from .transaction import (Transaction, multisig_script, TxOutput, PartialTransaction, PartialTxOutput,
-                          tx_from_any, PartialTxInput, TxOutpoint)
+                          tx_from_any, PartialTxInput, TxOutpoint, Sighash, NAMECOIN_VERSION)
 from .invoices import PR_PAID, PR_UNPAID, PR_UNKNOWN, PR_EXPIRED
 from .synchronizer import Notifier
 from .mnemonic import Mnemonic
@@ -1055,6 +1055,290 @@ class Commands:
 
         await self.broadcast(new_tx, stream_id=stream_id)
 
+    @command('wpn')
+    async def name_buy(self, identifier, offer=None, value=None, name_encoding='ascii', value_encoding='ascii', destination=None, amount=0.0, outputs=[], fee=None, feerate=None, from_addr=None, from_coins=None, change_addr=None, nocheck=False, unsigned=False, rbf=None, password=None, locktime=None, wallet: Abstract_Wallet = None):
+        """Buy an existing name from the current owner."""
+
+        self.nocheck = nocheck
+
+        name_encoding = Encoding(name_encoding)
+        value_encoding = Encoding(value_encoding)
+
+        tx_fee = satoshis(fee)
+        domain_addr = from_addr.split(',') if from_addr else None
+        domain_coins = from_coins.split(',') if from_coins else None
+        change_addr = self._resolver(change_addr, wallet)
+        domain_addr = None if domain_addr is None else map(self._resolver, domain_addr, repeat(wallet))
+
+        # Allow buying a name without any value changes by omitting the
+        # value.
+        if value is None:
+            try:
+                # TODO: handle semi-expired names
+                show_results = await self.name_show(identifier, name_encoding=name_encoding.value, value_encoding=value_encoding.value, wallet=wallet)
+            except NameUnconfirmedError:
+                # This check is in place to prevent an attack where an ElectrumX
+                # server supplies an unconfirmed name_update transaction with a
+                # malicious value and then tricks the wallet owner into signing a
+                # name renewal with that malicious value.
+                raise NameUpdatedTooRecentlyError("Name was updated too recently to safely determine current value.  Either wait or specify an explicit value.")
+
+            value = show_results["value"]
+
+        identifier_bytes = name_from_str(identifier, name_encoding)
+        validate_identifier_length(identifier_bytes)
+        value_bytes = name_from_str(value, value_encoding)
+        validate_value_length(value_bytes)
+        name_op = {"op": OP_NAME_UPDATE, "name": identifier_bytes, "value": value_bytes}
+        memo = "Buy: " + format_name_identifier(identifier_bytes)
+
+        if destination is None:
+            request = await self.add_request(None, memo=memo, wallet=wallet)
+            destination = request['address']
+
+        if offer is None and len(outputs) > 0:
+            raise Exception("Extra outputs not allowed when creating trade offer")
+
+        if amount == 0.0:
+            raise Exception("Must specify amount")
+        amount_sat = satoshis(amount)
+
+        if offer is not None:
+            offer = Transaction(offer)
+
+            # Validate offer
+            if len(offer.inputs()) != 1:
+                raise Exception("Offer must have exactly 1 input")
+            if len(offer.outputs()) != 1:
+                raise Exception("Offer must have exactly 1 output")
+            offer_output = offer.outputs()[0]
+            offer_output_name_op = offer_output.name_op
+            if offer_output_name_op is not None:
+                raise Exception("Sell offer output must be currency")
+            offer_input = offer.inputs()[0]
+            offer_input_outpoint = offer_input.prevout.to_json()
+            offer_input_tx = await self.gettransaction(offer_input_outpoint[0])
+            offer_input_tx = Transaction(offer_input_tx)
+            offer_input_output = offer_input_tx.outputs()[offer_input_outpoint[1]]
+            offer_input_name_op = offer_input_output.name_op
+            if offer_input_name_op is None:
+                raise Exception("Sell offer input must be name operation")
+            if offer_input_name_op["name"] != identifier_bytes:
+                raise Exception("Sell offer input name identifier mismatch")
+            offer_amount_sat = offer_output.value_display - offer_input_output.value_display
+            if offer_amount_sat != amount_sat:
+                raise Exception("Sell offer price mismatch")
+
+            # Currency output from counterparty
+            offer_output_partial = PartialTxOutput(scriptpubkey=offer_output.scriptpubkey, value=offer_output.value)
+            final_outputs = [offer_output_partial]
+
+            # Name input from counterparty
+            offer_input_partial = PartialTxInput(prevout=offer_input.prevout, nsequence=offer_input.nsequence, is_coinbase_output=offer_input.is_coinbase_output())
+            offer_input_partial._trusted_value_sats = offer_input_output.value
+            offer_input_partial.sighash = Sighash.SINGLE | Sighash.ANYONECANPAY
+            raw_inputs = [offer_input_partial]
+
+            # Name output from user
+            destination = self._resolver(destination, wallet)
+            name_output = PartialTxOutput.from_address_and_value(destination, 0)
+            name_output.add_name_op(name_op)
+            final_outputs.append(name_output)
+
+            # Currency input from user will be added by coin selector
+
+            locktime = offer.locktime
+
+            # Temporarily inflate name output so that the fee estimator gets
+            # the right size (otherwise it doesn't know about the
+            # scriptSig+witness that we splice in right before we sign the
+            # transaction).
+            sig_size = len(offer_input.script_sig) + (0 if offer_input.witness is None else len(offer_input.witness)//4)
+            orig_name_scriptpubkey = final_outputs[1].scriptpubkey
+            final_outputs[1].scriptpubkey += sig_size * b'0'
+        else:
+            final_outputs = []
+            destination = self._resolver(destination, wallet)
+            name_output = PartialTxOutput.from_address_and_value(destination, amount_sat)
+            name_output.add_name_op(name_op)
+            final_outputs.append(name_output)
+
+            raw_inputs = []
+
+        for o_address, o_amount in outputs:
+            o_address = self._resolver(o_address, wallet)
+            amount_sat = satoshis(o_amount)
+            final_outputs.append(PartialTxOutput.from_address_and_value(o_address, amount_sat))
+
+        tx = wallet.create_transaction(
+            final_outputs,
+            fee=tx_fee,
+            feerate=feerate,
+            change_addr=None,
+            domain_addr=domain_addr,
+            domain_coins=domain_coins,
+            unsigned=True,
+            rbf=rbf,
+            locktime=locktime,
+            name_inputs_raw=raw_inputs)
+
+        if offer is not None:
+            tx._inputs[0].script_sig = offer_input.script_sig
+            tx._inputs[0].witness = offer_input.witness
+            if not tx._inputs[0].is_complete():
+                raise Exception("Offer signature incomplete")
+
+            # Deflate the name output back to its correct value, since fee estimation is complete
+            tx._outputs[1].scriptpubkey = orig_name_scriptpubkey
+        else:
+            if len(tx.inputs()) > 1:
+                raise Exception("Wallet selected a currency input that was too small; try freezing small inputs")
+
+            # Store the difference between the input amount and the trade amount as
+            # change in the name output.
+            input_sat = tx.inputs()[0].value_sats_display()
+            change_sat = input_sat - amount_sat
+            name_output.value_display = change_sat
+
+            # Only have one output (the name output with change); set SIGHASH and
+            # clear cache.
+            tx._outputs = [name_output]
+            tx._inputs[0].sighash = Sighash.SINGLE | Sighash.ANYONECANPAY
+            tx.invalidate_ser_cache()
+
+        wallet.sign_transaction(tx, password)
+        return tx.serialize()
+
+    @command('wpn')
+    async def name_sell(self, identifier, offer=None, name_encoding='ascii', destination=None, amount=0.0, outputs=[], fee=None, feerate=None, from_addr=None, from_coins=None, change_addr=None, nocheck=False, unsigned=False, rbf=None, password=None, locktime=None, wallet: Abstract_Wallet = None):
+        """Sell a name you currently own."""
+
+        self.nocheck = nocheck
+
+        name_encoding = Encoding(name_encoding)
+
+        tx_fee = satoshis(fee)
+        domain_addr = from_addr.split(',') if from_addr else None
+        domain_coins = from_coins.split(',') if from_coins else None
+        change_addr = self._resolver(change_addr, wallet)
+        domain_addr = None if domain_addr is None else map(self._resolver, domain_addr, repeat(wallet))
+
+        identifier_bytes = name_from_str(identifier, name_encoding)
+        validate_identifier_length(identifier_bytes)
+        memo = "Sell: " + format_name_identifier(identifier_bytes)
+
+        if destination is None:
+            request = await self.add_request(None, memo=memo, wallet=wallet)
+            destination = request['address']
+
+        if offer is None and len(outputs) > 0:
+            raise Exception("Extra outputs not allowed when creating trade offer")
+
+        if amount == 0.0:
+            raise Exception("Must specify amount")
+        amount_sat = satoshis(amount)
+
+        if offer is not None:
+            offer = Transaction(offer)
+
+            # Validate offer
+            if len(offer.inputs()) != 1:
+                raise Exception("Offer must have exactly 1 input")
+            if len(offer.outputs()) != 1:
+                raise Exception("Offer must have exactly 1 output")
+            offer_output = offer.outputs()[0]
+            offer_output_name_op = offer_output.name_op
+            if offer_output_name_op is None:
+                raise Exception("Buy offer output must be name operation")
+            offer_input = offer.inputs()[0]
+            offer_input_outpoint = offer_input.prevout.to_json()
+            offer_input_tx = await self.gettransaction(offer_input_outpoint[0])
+            offer_input_tx = Transaction(offer_input_tx)
+            offer_input_output = offer_input_tx.outputs()[offer_input_outpoint[1]]
+            offer_input_name_op = offer_input_output.name_op
+            if offer_input_name_op is not None:
+                raise Exception("Buy offer input must be currency")
+            if offer_output_name_op["name"] != identifier_bytes:
+                raise Exception("Buy offer output name identifier mismatch")
+            offer_amount_sat = offer_input_output.value_display - offer_output.value_display
+            if offer_amount_sat != amount_sat:
+                raise Exception("Buy offer price mismatch")
+
+            # Name output from counterparty
+            offer_output_partial = PartialTxOutput(scriptpubkey=offer_output.scriptpubkey, value=offer_output.value)
+            final_outputs = [offer_output_partial]
+
+            # Currency input from counterparty
+            offer_input_partial = PartialTxInput(prevout=offer_input.prevout, nsequence=offer_input.nsequence, is_coinbase_output=offer_input.is_coinbase_output())
+            offer_input_partial._trusted_value_sats = offer_input_output.value
+            offer_input_partial.sighash = Sighash.SINGLE | Sighash.ANYONECANPAY
+            raw_inputs = [offer_input_partial]
+
+            # Name input from user and currency output from user will be added
+            # by coin selector
+
+            locktime = offer.locktime
+
+            # Temporarily inflate name output so that the fee estimator gets
+            # the right size (otherwise it doesn't know about the
+            # scriptSig+witness that we splice in right before we sign the
+            # transaction).
+            sig_size = len(offer_input.script_sig) + (0 if offer_input.witness is None else len(offer_input.witness)//4)
+            orig_name_scriptpubkey = final_outputs[0].scriptpubkey
+            final_outputs[0].scriptpubkey += sig_size * b'0'
+        else:
+            final_outputs = []
+            destination = self._resolver(destination, wallet)
+            currency_output = PartialTxOutput.from_address_and_value(destination, 0)
+            final_outputs.append(currency_output)
+
+            raw_inputs = []
+
+        for o_address, o_amount in outputs:
+            o_address = self._resolver(o_address, wallet)
+            amount_sat = satoshis(o_amount)
+            final_outputs.append(PartialTxOutput.from_address_and_value(o_address, amount_sat))
+
+        tx = wallet.create_transaction(
+            final_outputs,
+            fee=tx_fee,
+            feerate=feerate,
+            change_addr=None,
+            domain_addr=domain_addr,
+            domain_coins=domain_coins,
+            unsigned=True,
+            rbf=rbf,
+            locktime=locktime,
+            name_input_identifiers=[identifier_bytes],
+            name_inputs_raw=raw_inputs)
+
+        if offer is not None:
+            tx._inputs[0].script_sig = offer_input.script_sig
+            tx._inputs[0].witness = offer_input.witness
+            if not tx._inputs[0].is_complete():
+                raise Exception("Offer signature incomplete")
+
+            # Deflate the name output back to its correct value, since fee estimation is complete
+            tx._outputs[0].scriptpubkey = orig_name_scriptpubkey
+        else:
+            # Store the sum of input amount and trade amount in output;
+            # counterparty can make change.
+            input_sat = tx.inputs()[0].value_sats_display()
+            output_sat = input_sat + amount_sat
+            currency_output.value_display = output_sat
+
+            # Only have one output (the currency output); set SIGHASH and clear
+            # cache.  Explicitly set the transaction version to enable name
+            # operations; this won't happen automatically because the only output
+            # in the offer is a currency output.
+            tx._outputs = [currency_output]
+            tx._inputs[0].sighash = Sighash.SINGLE | Sighash.ANYONECANPAY
+            tx._version = NAMECOIN_VERSION
+            tx.invalidate_ser_cache()
+
+        wallet.sign_transaction(tx, password)
+        return tx.serialize()
+
     @command('w')
     async def onchain_history(self, year=None, show_addresses=False, show_fiat=False, wallet: Abstract_Wallet = None):
         """Wallet onchain history. Returns the transaction history of your wallet."""
@@ -1931,6 +2215,7 @@ command_options = {
     'commitment':  (None, "Pre-registration commitment (use if you're pre-registering a name for someone else)"),
     'salt':        (None, "Salt for the name pre-registration commitment (returned by name_new; you can usually omit this)"),
     'name_new_txid':(None, "Transaction ID for the name pre-registration (returned by name_new; you can usually omit this)"),
+    'offer':       (None, "Existing name trade offer to accept"),
     'trigger_txid':(None, "Broadcast the transaction when this txid reaches the specified number of confirmations"),
     'trigger_name':(None, "Broadcast the transaction when this name reaches the specified number of confirmations"),
     'options':     (None, "Options in Namecoin-Core-style dict"),

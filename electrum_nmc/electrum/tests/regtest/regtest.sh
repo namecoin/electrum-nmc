@@ -681,3 +681,60 @@ if [[ $1 == "name_autoregister" ]]; then
 
     echo "TODO: Finish these tests"
 fi
+
+if [[ $1 == "name_ant_workflow" ]]; then
+    # Expire any existing names from previous functional test runs.
+    new_blocks 35
+    wait_for_chain_sync "$alice"
+    wait_for_chain_sync "$bob"
+
+    echo "funding Bob"
+    $bitcoin_cli sendtoaddress $($bob getunusedaddress -o) 1
+
+    echo "Alice registers name"
+    $alice name_autoregister "x/name" --value "value"
+    sleep 5s
+    new_blocks 12
+    wait_for_chain_sync "$alice"
+    wait_for_chain_sync "$bob"
+    # TODO: Remove this line once daemon mode automatically does this.
+    $alice updatequeuedtransactions
+    sleep 5s
+    new_blocks 12
+    wait_for_chain_sync "$alice"
+    wait_for_chain_sync "$bob"
+    data_alice=$($alice name_show x/name -w /tmp/alice/regtest/wallets/default_wallet)
+    data_bob=$($bob name_show x/name -w /tmp/bob/regtest/wallets/default_wallet)
+    assert_equal "true" "$(echo $data_alice | jq -r .ismine)" "Newly registered Alice name doesn't belong to Alice"
+    assert_equal "false" "$(echo $data_bob | jq -r .ismine)" "Newly registered Alice name belongs to Bob"
+
+    echo "Alice sells to Bob"
+    offer=$($alice name_sell x/name --amount 0.02)
+    assert_raises_error "$bob name_buy x/name --amount 0.03 --value value2 --offer $offer" "price mismatch"
+    assert_raises_error "$bob name_buy x/name2 --amount 0.02 --value value2 --offer $offer" "name identifier mismatch"
+    completed_offer=$($bob name_buy x/name --amount 0.02 --value value2 --offer $offer)
+    $bob broadcast $completed_offer
+    sleep 5s
+    new_blocks 12
+    wait_for_chain_sync "$alice"
+    wait_for_chain_sync "$bob"
+    data_alice=$($alice name_show x/name -w /tmp/alice/regtest/wallets/default_wallet)
+    data_bob=$($bob name_show x/name -w /tmp/bob/regtest/wallets/default_wallet)
+    assert_equal "false" "$(echo $data_alice | jq -r .ismine)" "Transferred Bob name belongs to Alice"
+    assert_equal "true" "$(echo $data_bob | jq -r .ismine)" "Transferred Bob name doesn't belong to Bob"
+
+    echo "Alice buys from Bob"
+    offer=$($alice name_buy x/name --amount 0.02 --value value3)
+    assert_raises_error "$bob name_sell x/name --amount 0.03 --offer $offer" "price mismatch"
+    assert_raises_error "$bob name_sell x/name2 --amount 0.02 --offer $offer" "name identifier mismatch"
+    completed_offer=$($bob name_sell x/name --amount 0.02 --offer $offer)
+    $bob broadcast $completed_offer
+    sleep 5s
+    new_blocks 12
+    wait_for_chain_sync "$alice"
+    wait_for_chain_sync "$bob"
+    data_alice=$($alice name_show x/name -w /tmp/alice/regtest/wallets/default_wallet)
+    data_bob=$($bob name_show x/name -w /tmp/bob/regtest/wallets/default_wallet)
+    assert_equal "true" "$(echo $data_alice | jq -r .ismine)" "Transferred Alice name doesn't belong to Alice"
+    assert_equal "false" "$(echo $data_bob | jq -r .ismine)" "Transferred Alice name belongs to Bob"
+fi
