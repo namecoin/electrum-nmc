@@ -1,7 +1,7 @@
 from typing import NamedTuple, Union
 
 from electrum import transaction, bitcoin
-from electrum.transaction import convert_raw_tx_to_hex, tx_from_any, Transaction, PartialTransaction, Sighash
+from electrum.transaction import convert_raw_tx_to_hex, tx_from_any, Transaction, PartialTransaction, TxOutpoint, PartialTxInput, PartialTxOutput, Sighash
 from electrum.util import bh2u, bfh
 
 from . import ElectrumTestCase
