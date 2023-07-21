@@ -35,7 +35,7 @@ from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
 
 from electrum.i18n import _
-from electrum.names import add_domain_record, get_domain_records
+from electrum.names import add_domain_record, get_domain_records, validate_onion_address
 
 from .forms.dnsdialog import Ui_DNSDialog
 from .forms.dnssubdomaindialog import Ui_DNSSubDomainDialog
@@ -134,6 +134,11 @@ class ConfigureDNSDialog(QDialog, MessageBoxMixin):
         self.ui.btnDeleteRecord.clicked.connect(self.delete_selected_records)
         self.ui.btnEditRecord.clicked.connect(self.edit_selected_record)
 
+        # Connect the textChanged signal of QLineEdit to the validation slot
+        self.ui.editAHostname.textChanged.connect(self.validate_input)
+        self.ui.error_label.setStyleSheet('border: none')
+        self.ui.comboHostType.currentIndexChanged.connect(self.ui.error_label.clear)
+
         self.accepted.connect(lambda: self.name_dialog.set_value(self.get_value()))
 
     def add_domain(self, domain):
@@ -211,6 +216,15 @@ class ConfigureDNSDialog(QDialog, MessageBoxMixin):
         self.insert_record(idx, record)
 
         self.ui.editAHostname.setText("")
+
+    def validate_input(self, address):
+        address_type = self.ui.comboHostType.currentText()
+        if address_type == "Tor":
+            try:
+                validate_onion_address(address)
+                self.ui.error_label.clear()
+            except Exception as e:
+                self.ui.error_label.setText(str(e))
 
     def create_cname_record(self):
         model = self.ui.listDNSRecords.model()
