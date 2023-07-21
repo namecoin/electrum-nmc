@@ -23,6 +23,8 @@
 # CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+import base64
+import base58
 from enum import Enum
 from typing import Dict, NamedTuple, Optional
 
@@ -131,6 +133,62 @@ def validate_value_length(value: bytes):
     value_length = len(value)
     if value_length > value_length_limit:
         raise BitcoinException('value length {} exceeds limit of {}'.format(value_length, value_length_limit))
+    
+def validate_onion_address(address: str) -> None: # The Address should not have .onion (An implementation to check & remove can be considered)
+    try:
+        # Initialize the bytearray to hold the decoded service ID
+        decoded_service_id = bytearray([0] * V3_ONION_SERVICE_ID_RAW_SIZE)
+
+        # Decode the service ID from base32 into the decoded_service_id bytearray
+        decoded_service_id = base64.b32decode(address.encode(), decoded_service_id)
+
+        # Check decoded service ID has the expected length
+        if len(decoded_service_id) != V3_ONION_SERVICE_ID_RAW_SIZE:
+            raise ValueError("Invalid service ID length")
+
+        # Check the version byte
+        version_byte = decoded_service_id[V3_ONION_SERVICE_ID_VERSION_OFFSET]
+        if version_byte > 0x03:
+            raise ValueError(f"Warning: Unknown version byte {version_byte}")
+
+        if version_byte != 0x03:
+            raise ValueError("Invalid version byte")
+            
+        # Extract the public key from the decoded service ID
+        public_key = bytearray(decoded_service_id[:ED25519_PUBLIC_KEY_SIZE])
+
+        # Calculate the truncated checksum
+        truncated_checksum = calc_truncated_checksum(public_key)
+
+        # Check if the truncated checksum matches the corresponding bytes in the decoded service ID
+        if truncated_checksum[0] != decoded_service_id[V3_ONION_SERVICE_ID_CHECKSUM_OFFSET] or \
+                truncated_checksum[1] != decoded_service_id[V3_ONION_SERVICE_ID_CHECKSUM_OFFSET + 1]:
+            raise ValueError("Invalid checksum")
+    
+    except Exception as e:
+        raise ValueError("Invalid onion address: " + str(e))
+
+def calc_truncated_checksum(public_key):
+    # Define the size of the hash in bytes
+    SHA256_BYTES = 256 // 8
+    hash_bytes = bytearray(SHA256_BYTES)
+
+    hasher = hashlib.sha3_256()
+    assert SHA256_BYTES == hasher.digest_size
+
+    # Calculate the checksum
+    hasher.update(b".onion checksum")
+    hasher.update(public_key)
+    hasher.update(bytes([0x03]))
+    hash_bytes = bytearray(hasher.digest())
+
+    return [hash_bytes[0], hash_bytes[1]]
+
+def validate_zeronet_address(address: str) -> None: # Validate P2PKH Address (Zero Net)
+    try:
+        base58.b58decode_check(address)
+    except Exception as e:
+        raise ValueError("Invalid zeronet address: " + str(e))
 
 def build_name_new(identifier: bytes, salt: bytes = None, address: str = None, password: str = None, wallet = None):
     validate_identifier_length(identifier)
@@ -1392,6 +1450,7 @@ def add_domain_record_import(value, data):
 
 
 import binascii
+import hashlib
 from copy import deepcopy
 from datetime import datetime, timedelta
 import json
@@ -1407,3 +1466,7 @@ OP_NAME_NEW = opcodes.OP_1
 OP_NAME_FIRSTUPDATE = opcodes.OP_2
 OP_NAME_UPDATE = opcodes.OP_3
 
+V3_ONION_SERVICE_ID_RAW_SIZE= 35
+V3_ONION_SERVICE_ID_VERSION_OFFSET = 34
+ED25519_PUBLIC_KEY_SIZE = 32
+V3_ONION_SERVICE_ID_CHECKSUM_OFFSET = 32
