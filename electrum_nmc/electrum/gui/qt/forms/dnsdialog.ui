@@ -207,6 +207,31 @@
        </item>
        <item>
         <layout class="QHBoxLayout" name="horizontalLayout_6">
+         <!-- TODO: Reconcile this with Namecoin Core, which includes a "Hostname" field. -->
+         <!--<item>
+          <layout class="QVBoxLayout" name="verticalLayout_11">
+           <item>
+            <widget class="QLabel" name="labelCNAMEHost">
+             <property name="maximumSize">
+              <size>
+               <width>16777215</width>
+               <height>20</height>
+              </size>
+             </property>
+             <property name="text">
+              <string>Hostname</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QValidatedLineEdit" name="editCNAMEHost">
+             <property name="placeholderText">
+              <string>e.g., www, mail</string>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </item>-->
          <item>
           <layout class="QVBoxLayout" name="verticalLayout_12">
            <item>
@@ -262,6 +287,129 @@
        </item>
       </layout>
      </widget>
+     <!--
+     <widget class="QWidget" name="tabSOARP">
+      <attribute name="title">
+       <string>SOA/RP</string>
+      </attribute>
+      <layout class="QVBoxLayout" name="verticalLayout_Window">
+       <item>
+        <widget class="QLabel" name="labelSOARPDesc">
+         <property name="text">
+          <string>Domain holder e-mail address and/or information. (This is recommended at the domain level and will be inserted into the SOA record of DNS bridges.)</string>
+         </property>
+         <property name="wordWrap">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <layout class="QVBoxLayout" name="verticalLayout_19">
+         <item>
+          <widget class="QLabel" name="labelSOARPEmail">
+           <property name="text">
+            <string>Email</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QValidatedLineEdit" name="editSOARPEmail">
+           <property name="placeholderText">
+            <string>e.g., email@host.domain</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLabel" name="labelSOARPInfo">
+           <property name="text">
+            <string>Info</string>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QLineEdit" name="editSOARPInfo">
+           <property name="placeholderText">
+            <string>e.g., Example Name</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+       <item>
+        <layout class="QHBoxLayout" name="horizontalLayout_4">
+         <item>
+          <spacer name="horizontalSpacer_2">
+           <property name="orientation">
+            <enum>Qt::Horizontal</enum>
+           </property>
+           <property name="sizeHint" stdset="0">
+            <size>
+             <width>40</width>
+             <height>20</height>
+            </size>
+           </property>
+          </spacer>
+         </item>
+         <item>
+          <widget class="QPushButton" name="btnSOARPCreate">
+           <property name="text">
+            <string>Create Record</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+      </layout>
+     </widget>
+     <widget class="QWidget" name="tabDNAME">
+      <attribute name="title">
+       <string>DNAME</string>
+      </attribute>
+      <layout class="QVBoxLayout" name="verticalLayout_Display">
+       <item>
+        <widget class="QLabel" name="labelDNAMEDesc">
+         <property name="text">
+          <string>Specifies that all subdomains of this name are translated to the given string before lookup. As with CNAME, absolute domain names must end with a dot (.).</string>
+         </property>
+         <property name="wordWrap">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QValidatedLineEdit" name="editDNAMEHost">
+         <property name="placeholderText">
+          <string>e.g., otherhost.bit.</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <layout class="QHBoxLayout" name="horizontalLayout_1_Display">
+         <item>
+          <spacer name="horizontalSpacer_4">
+           <property name="orientation">
+            <enum>Qt::Horizontal</enum>
+           </property>
+           <property name="sizeHint" stdset="0">
+            <size>
+             <width>40</width>
+             <height>20</height>
+            </size>
+           </property>
+          </spacer>
+         </item>
+         <item>
+          <widget class="QPushButton" name="btnDNAMECreate">
+           <property name="text">
+            <string>Create Record</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+      </layout>
+     </widget>
+     -->
      <widget class="QWidget" name="tabNS">
       <property name="autoFillBackground">
        <bool>false</bool>
@@ -273,6 +421,7 @@
        <item>
         <widget class="QLabel" name="labelNSDesc">
          <property name="text">
+          <!-- TODO: Reconcile this text with Namecoin Core, which recommends listing multiple nameservers at once. -->
           <string>Master nameserver of the configured domain. Note that this delegates all IP related responsibility of this domain and its sub-domains to the master server, effectively bypassing other settings (e.g. A records). Absolute domains must end in a dot (.). IP addresses are not allowed.</string>
          </property>
          <property name="wordWrap">
@@ -970,6 +1119,7 @@
       </widget>
      </item>
      <item>
+      <!-- TODO: Reconcile this with Namecoin Core's version, which uses QListWidget -->
       <widget class="QTableView" name="listDNSRecords">
        <property name="minimumSize">
         <size>
@@ -1040,6 +1190,8 @@
     </layout>
    </item>
    <item>
+    <!-- TODO: Reconcile this with Namecoin Core's version (commented out below) -->
+    <!-- TODO: Ask upstream Electrum to switch to QDialogButtonBox. -->
     <widget class="QDialogButtonBox" name="buttonBox">
      <property name="standardButtons">
       <set>QDialogButtonBox::Cancel|QDialogButtonBox::Ok</set>
@@ -1051,6 +1203,39 @@
    </item>
   </layout>
  </widget>
+    <!--<layout class="QHBoxLayout" name="horizontalLayout_Buttons">
+     <item>
+      <layout class="QVBoxLayout" name="verticalLayout_4">
+       <item>
+        <layout class="QHBoxLayout" name="horizontalLayout">
+         <item>
+          <widget class="QPushButton" name="btnOK">
+           <property name="text">
+            <string>&amp;OK</string>
+           </property>
+           <property name="autoDefault">
+            <bool>false</bool>
+           </property>
+           <property name="default">
+            <bool>true</bool>
+           </property>
+          </widget>
+         </item>
+         <item>
+          <widget class="QPushButton" name="btnCancel">
+           <property name="text">
+            <string>&amp;Cancel</string>
+           </property>
+           <property name="autoDefault">
+            <bool>false</bool>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
+      </layout>
+     </item>
+    </layout>-->
  <customwidgets>
   <customwidget>
    <class>QValidatedLineEdit</class>
