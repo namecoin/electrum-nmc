@@ -134,7 +134,14 @@ def validate_value_length(value: bytes):
     if value_length > value_length_limit:
         raise BitcoinException('value length {} exceeds limit of {}'.format(value_length, value_length_limit))
     
-def validate_onion_address(address: str) -> None: # The Address should not have .onion (An implementation to check & remove can be considered)
+def validate_onion_address(address: str) -> None:
+    # Verify and remove ".onion" from the address if present
+    if not address.endswith(".onion"):
+        raise ValueError("Invalid onion address: missing .onion suffix")
+
+    # Remove ".onion" from the address
+    address = address[:-6]  # Slice slicing to remove the last 6 characters (length of ".onion")
+
     try:
         # Initialize the bytearray to hold the decoded service ID
         decoded_service_id = bytearray([0] * V3_ONION_SERVICE_ID_RAW_SIZE)
@@ -149,10 +156,10 @@ def validate_onion_address(address: str) -> None: # The Address should not have 
         # Check the version byte
         version_byte = decoded_service_id[V3_ONION_SERVICE_ID_VERSION_OFFSET]
         if version_byte > 0x03:
-            raise ValueError(f"Warning: Unknown version byte {version_byte}")
+            raise ValueError(f"Warning: this is a v{version_byte} onion service, which is newer than the v3 onion services that Electrum-NMC knows how to validate. Please verify that this is what you really meant to enter.")
 
         if version_byte != 0x03:
-            raise ValueError("Invalid version byte")
+            raise ValueError(f"Obsolete v{version_byte} onion service")
             
         # Extract the public key from the decoded service ID
         public_key = bytearray(decoded_service_id[:ED25519_PUBLIC_KEY_SIZE])
@@ -182,7 +189,7 @@ def calc_truncated_checksum(public_key):
     hasher.update(bytes([0x03]))
     hash_bytes = bytearray(hasher.digest())
 
-    return [hash_bytes[0], hash_bytes[1]]
+    return hash_bytes[:2]
 
 def validate_zeronet_address(address: str) -> None: # Validate P2PKH Address (Zero Net)
     try:
