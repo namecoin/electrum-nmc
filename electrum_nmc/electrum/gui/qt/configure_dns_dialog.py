@@ -35,7 +35,7 @@ from PyQt5.QtGui import *
 from PyQt5.QtWidgets import *
 
 from electrum.i18n import _
-from electrum.names import add_domain_record, get_domain_records, validate_onion_address
+from electrum.names import add_domain_record, get_domain_records, validate_onion_address, validate_zeronet_address
 
 from .forms.dnsdialog import Ui_DNSDialog
 from .forms.dnssubdomaindialog import Ui_DNSSubDomainDialog
@@ -225,6 +225,13 @@ class ConfigureDNSDialog(QDialog, MessageBoxMixin):
                 self.ui.error_label.clear()
             except Exception as e:
                 self.ui.error_label.setText(str(e))
+        elif address_type == "ZeroNet":
+            try:
+                validate_zeronet_address(address)
+                self.ui.error_label.clear()
+            except Exception as e:
+                self.ui.error_label.setText(str(e))
+        
 
     def create_cname_record(self):
         model = self.ui.listDNSRecords.model()

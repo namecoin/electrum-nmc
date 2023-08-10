@@ -24,9 +24,9 @@
 # SOFTWARE.
 
 import base64
-import base58
 from enum import Enum
 from typing import Dict, NamedTuple, Optional
+from .bitcoin import b58_address_to_hash160
 
 from . import constants
 
@@ -193,9 +193,12 @@ def calc_truncated_checksum(public_key):
 
 def validate_zeronet_address(address: str) -> None: # Validate P2PKH Address (Zero Net)
     try:
-        base58.b58decode_check(address)
+        addrtype, _ = b58_address_to_hash160(address)
     except Exception as e:
         raise ValueError("Invalid zeronet address: " + str(e))
+    
+    if addrtype != 0:
+        raise ValueError("Invalid address type.")
 
 def build_name_new(identifier: bytes, salt: bytes = None, address: str = None, password: str = None, wallet = None):
     validate_identifier_length(identifier)
