@@ -173,7 +173,7 @@ def validate_onion_address(address: str) -> None:
             raise ValueError("Invalid checksum")
     
     except Exception as e:
-        raise ValueError("Invalid onion address: " + str(e))
+        raise ValueError(f"Invalid onion address: {e}")
 
 def calc_truncated_checksum(public_key):
     # Define the size of the hash in bytes
@@ -195,7 +195,7 @@ def validate_zeronet_address(address: str) -> None: # Validate P2PKH Address (Ze
     try:
         addrtype, _ = b58_address_to_hash160(address)
     except Exception as e:
-        raise ValueError("Invalid zeronet address: " + str(e))
+        raise ValueError(f"Invalid zeronet address: {e}")
     
     if addrtype != 0:
         raise ValueError("Invalid address type.")
@@ -204,7 +204,7 @@ def validate_ip_address(address: str) -> None:
     try:
         ipaddress.ip_address(address)
     except Exception as e:
-        raise ValueError("Invalid IP address:" + str(e))
+        raise ValueError(f"Invalid IP address: {e}")
 
 def build_name_new(identifier: bytes, salt: bytes = None, address: str = None, password: str = None, wallet = None):
     validate_identifier_length(identifier)

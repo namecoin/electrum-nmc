@@ -224,13 +224,13 @@ class ConfigureDNSDialog(QDialog, MessageBoxMixin):
                 validate_onion_address(address)
                 self.ui.error_label.clear()
             except Exception as e:
-                self.ui.error_label.setText(str(e))
+                self.ui.error_label.setText(f"{e}")
         elif address_type == "ZeroNet":
             try:
                 validate_zeronet_address(address)
                 self.ui.error_label.clear()
             except Exception as e:
-                self.ui.error_label.setText(str(e))
+                self.ui.error_label.setText(f"{e}")
 
     def create_cname_record(self):
         model = self.ui.listDNSRecords.model()
