@@ -231,7 +231,6 @@ class ConfigureDNSDialog(QDialog, MessageBoxMixin):
                 self.ui.error_label.clear()
             except Exception as e:
                 self.ui.error_label.setText(str(e))
-        
 
     def create_cname_record(self):
         model = self.ui.listDNSRecords.model()
