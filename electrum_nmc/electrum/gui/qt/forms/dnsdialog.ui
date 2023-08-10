@@ -56,8 +56,8 @@
       <attribute name="title">
        <string>A</string>
       </attribute>
-      <layout class="QVBoxLayout" name="verticalLayout_Main">
-       <item>
+      <layout class="QGridLayout" name="gridLayout">
+       <item row="0" column="0" colspan="4">
         <widget class="QLabel" name="labelADesc">
          <property name="maximumSize">
           <size>
@@ -73,7 +73,7 @@
          </property>
         </widget>
        </item>
-       <item>
+       <item row="1" column="0" colspan="4">
         <layout class="QHBoxLayout" name="horizontalLayout_2">
          <item>
           <layout class="QVBoxLayout" name="verticalLayout_3">
@@ -155,29 +155,38 @@
          </item>
         </layout>
        </item>
-       <item>
-        <layout class="QHBoxLayout" name="horizontalLayout_3">
-         <item>
-          <spacer name="horizontalSpacer">
-           <property name="orientation">
-            <enum>Qt::Horizontal</enum>
-           </property>
-           <property name="sizeHint" stdset="0">
-            <size>
-             <width>40</width>
-             <height>20</height>
-            </size>
-           </property>
-          </spacer>
-         </item>
-         <item>
-          <widget class="QPushButton" name="btnACreate">
-           <property name="text">
-            <string>Create Record</string>
-           </property>
-          </widget>
-         </item>
-        </layout>
+       <item row="2" column="1">
+        <spacer name="horizontalSpacer">
+         <property name="orientation">
+          <enum>Qt::Horizontal</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>274</width>
+           <height>20</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+       <item row="2" column="3">
+        <widget class="QPushButton" name="btnACreate">
+         <property name="text">
+          <string>Create Record</string>
+         </property>
+        </widget>
+       </item>
+       <item row="2" column="0">
+        <widget class="QValidatedLineEdit" name="error_label">
+         <property name="enabled">
+          <bool>true</bool>
+         </property>
+         <property name="text">
+          <string/>
+         </property>
+         <property name="placeholderText">
+          <string/>
+         </property>
+        </widget>
        </item>
       </layout>
      </widget>
@@ -461,12 +470,12 @@
        <item>
         <widget class="QLabel" name="labelDSDesc">
          <property name="text">
-          <string>DNSSEC fingerprints for securing the domain when used with DNS via NS. Format roughly mirrors RFC3658.  &lt;a href="https://www.namecoin.org/docs/name-owners/dnssec/"&gt;See the DNSSEC documentation for more details.&lt;/a&gt;</string>
-         </property>
-         <property name="openExternalLinks">
-          <bool>true</bool>
+          <string>DNSSEC fingerprints for securing the domain when used with DNS via NS. Format roughly mirrors RFC3658.  &lt;a href=&quot;https://www.namecoin.org/docs/name-owners/dnssec/&quot;&gt;See the DNSSEC documentation for more details.&lt;/a&gt;</string>
          </property>
          <property name="wordWrap">
+          <bool>true</bool>
+         </property>
+         <property name="openExternalLinks">
           <bool>true</bool>
          </property>
         </widget>
@@ -617,12 +626,12 @@
        <item>
         <widget class="QLabel" name="labelTLSDesc">
          <property name="text">
-          <string>A TLS record authenticates TLS servers without a public certificate authority.  TLS records are valid for &lt;code&gt;example.bit&lt;/code&gt; and all subdomains.  You can generate a TLS record via:&lt;br&gt;&lt;code&gt;generate_nmc_cert -use-ca -use-aia -host example.bit&lt;/code&gt;&lt;br&gt;&lt;a href="https://www.namecoin.org/docs/name-owners/tls/"&gt;See the TLS documentation for more details.&lt;/a&gt;</string>
-         </property>
-         <property name="openExternalLinks">
-          <bool>true</bool>
+          <string>A TLS record authenticates TLS servers without a public certificate authority.  TLS records are valid for &lt;code&gt;example.bit&lt;/code&gt; and all subdomains.  You can generate a TLS record via:&lt;br&gt;&lt;code&gt;generate_nmc_cert -use-ca -use-aia -host example.bit&lt;/code&gt;&lt;br&gt;&lt;a href=&quot;https://www.namecoin.org/docs/name-owners/tls/&quot;&gt;See the TLS documentation for more details.&lt;/a&gt;</string>
          </property>
          <property name="wordWrap">
+          <bool>true</bool>
+         </property>
+         <property name="openExternalLinks">
           <bool>true</bool>
          </property>
         </widget>
@@ -884,12 +893,12 @@
        <item>
         <widget class="QLabel" name="labelIMPORTDesc">
          <property name="text">
-          <string>Imports specified entries from another Namecoin name and merges with the current one. Optionally, import entries and associate them with a designated subdomain.  &lt;a href="https://www.namecoin.org/docs/name-owners/delegated-alteration/"&gt;See the Delegated Alteration documentation for more details.&lt;/a&gt;</string>
-         </property>
-         <property name="openExternalLinks">
-          <bool>true</bool>
+          <string>Imports specified entries from another Namecoin name and merges with the current one. Optionally, import entries and associate them with a designated subdomain.  &lt;a href=&quot;https://www.namecoin.org/docs/name-owners/delegated-alteration/&quot;&gt;See the Delegated Alteration documentation for more details.&lt;/a&gt;</string>
          </property>
          <property name="wordWrap">
+          <bool>true</bool>
+         </property>
+         <property name="openExternalLinks">
           <bool>true</bool>
          </property>
         </widget>
@@ -1184,13 +1193,16 @@
     <!-- TODO: Reconcile this with Namecoin Core's version (commented out below) -->
     <!-- TODO: Ask upstream Electrum to switch to QDialogButtonBox. -->
     <widget class="QDialogButtonBox" name="buttonBox">
-     <property name="centerButtons">
-      <bool>true</bool>
-     </property>
      <property name="standardButtons">
       <set>QDialogButtonBox::Cancel|QDialogButtonBox::Ok</set>
      </property>
+     <property name="centerButtons">
+      <bool>true</bool>
+     </property>
     </widget>
+   </item>
+  </layout>
+ </widget>
     <!--<layout class="QHBoxLayout" name="horizontalLayout_Buttons">
      <item>
       <layout class="QVBoxLayout" name="verticalLayout_4">
@@ -1224,9 +1236,6 @@
       </layout>
      </item>
     </layout>-->
-   </item>
-  </layout>
- </widget>
  <customwidgets>
   <customwidget>
    <class>QValidatedLineEdit</class>
