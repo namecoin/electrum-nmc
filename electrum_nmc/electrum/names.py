@@ -206,6 +206,55 @@ def validate_ip_address(address: str) -> None:
     except Exception as e:
         raise ValueError(f"Invalid IP address: {e}")
 
+def validate_i2p_address(address: str) -> None: # Naming rules were implemeted from https://geti2p.net/en/docs/naming
+    try:
+        # Check length
+        if len(address) > 67:
+            raise ValueError("Address length exceeds 67 characters")
+
+        # Check if it ends with '.b32.i2p'
+        if address.endswith('.b32.i2p'):
+            validate_base32(address)
+            return  # End function if base32 validation passes
+        
+        # Check if it ends with '.i2p' (after base32 check)
+        if not address.endswith('.i2p'):
+            raise ValueError("Address must end with '.i2p'")
+
+
+        # Check if it starts with '.' or '-'
+        if address.startswith('.') or address.startswith('-'):
+            raise ValueError("Address cannot start with '.' or '-'")
+
+        # Check for consecutive dots, '.-' or '-.'
+        if '..' in address or '.-' in address or '-.' in address:
+            raise ValueError("Address contains invalid sequences")
+
+        # Check for valid characters using regex. Allows only small letters, number, '.' and '-'
+        if not re.match(r'^[a-z0-9.\-]+$', address):
+            raise ValueError("Address contains invalid characters.")
+
+        # Check for IDN format. '--' should only be present in 'xn--' 
+        if '--' in address and ('xn--' not in address or '--' in address[4:]):
+            raise ValueError("Invalid IDN format")
+    except ValueError as e:
+        raise ValueError(f"Invalid I2P Address: {e}")
+
+def validate_base32(address: str) -> None:
+    try:
+        # remove '.b32.i2p'
+        address = address[:-8] 
+        # Add padding  
+        padding_needed = (8 - len(address) % 8)
+        padded_address = address + '=' * padding_needed
+
+        decoded = base64.b32decode(padded_address, casefold=True)
+        if len(decoded) != BASE32_LENGTH:
+            raise ValueError("Invalid length for base32 hash")
+
+    except (base64.binascii.Error, ValueError):
+        raise ValueError("Invalid base32 format")
+
 def build_name_new(identifier: bytes, salt: bytes = None, address: str = None, password: str = None, wallet = None):
     validate_identifier_length(identifier)
 
@@ -1487,3 +1536,4 @@ V3_ONION_SERVICE_ID_RAW_SIZE= 35
 V3_ONION_SERVICE_ID_VERSION_OFFSET = 34
 ED25519_PUBLIC_KEY_SIZE = 32
 V3_ONION_SERVICE_ID_CHECKSUM_OFFSET = 32
+BASE32_LENGTH = 32
