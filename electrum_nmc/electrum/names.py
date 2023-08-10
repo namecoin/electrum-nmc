@@ -200,6 +200,12 @@ def validate_zeronet_address(address: str) -> None: # Validate P2PKH Address (Ze
     if addrtype != 0:
         raise ValueError("Invalid address type.")
 
+def validate_ip_address(address: str) -> None:
+    try:
+        ipaddress.ip_address(address)
+    except Exception as e:
+        raise ValueError("Invalid IP address:" + str(e))
+
 def build_name_new(identifier: bytes, salt: bytes = None, address: str = None, password: str = None, wallet = None):
     validate_identifier_length(identifier)
 
@@ -1466,6 +1472,7 @@ from datetime import datetime, timedelta
 import json
 import os
 import re
+import ipaddress
 
 from .bitcoin import push_script, script_to_scripthash
 from .crypto import hash_160
