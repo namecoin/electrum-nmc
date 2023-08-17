@@ -303,7 +303,7 @@ Builder.load_string('''
     width: self.texture_size[0]
     height: '30dp'
     on_release:
-        self.parent.new_word(self.text)
+        if self.parent: self.parent.new_word(self.text)
 
 
 <SeedButton@Button>:
@@ -640,8 +640,10 @@ class WizardDialog(EventsDialog):
         return (None,)
 
     def on_release(self, button):
+        if self._on_release is True:
+            return
         self._on_release = True
-        self.close()
+        self.dismiss()
         if not button:
             self.wizard.terminate(aborted=True)
             return
@@ -1069,7 +1071,7 @@ class InstallWizard(BaseWizard, Widget):
             try: os.unlink(self.path)
             except FileNotFoundError: pass
             self.reset_stack()
-            self.confirm_dialog(message=_('Wallet creation failed'), run_next=self.app.on_wizard_aborted)
+            self.confirm_dialog(message=_('Wallet creation failed'), run_next=lambda x: self.app.on_wizard_aborted())
 
     def choice_dialog(self, **kwargs):
         choices = kwargs['choices']
