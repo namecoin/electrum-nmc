@@ -132,6 +132,30 @@ def validate_value_length(value: bytes):
     if value_length > value_length_limit:
         raise BitcoinException('value length {} exceeds limit of {}'.format(value_length, value_length_limit))
 
+def validate_i2p_address(address: str) -> None:
+    try:
+        # Check length
+        if len(address) > 67:
+            raise ValueError("Address length exceeds 67 characters")
+
+        # Check if it ends with '.b32.i2p'
+        if address.endswith('.b32.i2p'):
+            # remove '.b32.i2p'
+            address = address[:-len('.b32.i2p')] 
+            # Add padding  
+            padding_needed = (8 - len(address) % 8)
+            padded_address = address + '=' * padding_needed
+
+            decoded = base64.b32decode(padded_address, casefold=True)
+            if len(decoded) != BASE32_LENGTH:
+                raise ValueError("Invalid length for base32 hash")
+
+        else:
+            raise ValueError("Address doesn't end with '.b32.i2p'")
+            
+    except (base64.binascii.Error, ValueError) as e:
+        raise ValueError(f"Invalid I2P address: {e}")
+    
 def build_name_new(identifier: bytes, salt: bytes = None, address: str = None, password: str = None, wallet = None):
     validate_identifier_length(identifier)
 
@@ -1397,6 +1421,7 @@ from datetime import datetime, timedelta
 import json
 import os
 import re
+import base64
 
 from .bitcoin import push_script, script_to_scripthash
 from .crypto import hash_160
@@ -1407,3 +1432,4 @@ OP_NAME_NEW = opcodes.OP_1
 OP_NAME_FIRSTUPDATE = opcodes.OP_2
 OP_NAME_UPDATE = opcodes.OP_3
 
+BASE32_LENGTH = 32
