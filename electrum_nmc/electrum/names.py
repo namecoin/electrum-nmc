@@ -132,6 +132,14 @@ def validate_value_length(value: bytes):
     if value_length > value_length_limit:
         raise BitcoinException('value length {} exceeds limit of {}'.format(value_length, value_length_limit))
 
+def validate_zeronet_address(address: str) -> None: # Validate P2PKH Address (Zero Net)
+    try:
+        addrtype, _ = b58_address_to_hash160(address)
+    except Exception as e:
+        raise ValueError(f"Invalid zeronet address: {e}")
+    if addrtype != ZERONET_BASE58_ADDRTYPE:
+        raise ValueError("Invalid address type.")
+
 def build_name_new(identifier: bytes, salt: bytes = None, address: str = None, password: str = None, wallet = None):
     validate_identifier_length(identifier)
 
@@ -1398,7 +1406,7 @@ import json
 import os
 import re
 
-from .bitcoin import push_script, script_to_scripthash
+from .bitcoin import push_script, script_to_scripthash, b58_address_to_hash160
 from .crypto import hash_160
 from .transaction import MalformedBitcoinScript, match_script_against_template, opcodes, OPPushDataGeneric, PartialTransaction, script_GetOp, Transaction
 from .util import bh2u, bfh, BitcoinException
@@ -1407,3 +1415,4 @@ OP_NAME_NEW = opcodes.OP_1
 OP_NAME_FIRSTUPDATE = opcodes.OP_2
 OP_NAME_UPDATE = opcodes.OP_3
 
+ZERONET_BASE58_ADDRTYPE = 0
