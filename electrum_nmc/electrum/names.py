@@ -145,6 +145,22 @@ def build_name_new(identifier: bytes, salt: bytes = None, address: str = None, p
 
     return {"op": OP_NAME_NEW, "commitment": commitment}, salt
 
+def validate_ipv4_address(address: str) -> None:
+    try:
+        ipaddress.IPv4Address(address)
+    except ipaddress.AddressValueError as e:
+        raise ValueError(f"Invalid IPv4 address: {e}")
+    except ipaddress.NetmaskValueError as e:
+        raise ValueError(f"Invalid IPv4 netmask: {e}")
+
+def validate_ipv6_address(address: str) -> None:
+    try:
+        ipaddress.IPv6Address(address)
+    except ipaddress.AddressValueError as e:
+        raise ValueError(f"Invalid IPv6 address: {e}")
+    except ipaddress.NetmaskValueError as e:
+        raise ValueError(f"Invalid IPv6 netmask: {e}")
+
 def build_name_commitment(identifier: bytes, salt: bytes) -> bytes:
     preimage = salt + identifier
     commitment = hash_160(preimage)
@@ -1397,6 +1413,7 @@ from datetime import datetime, timedelta
 import json
 import os
 import re
+import ipaddress
 
 from .bitcoin import push_script, script_to_scripthash
 from .crypto import hash_160
