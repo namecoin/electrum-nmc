@@ -155,7 +155,9 @@ def validate_ipv4_address(address: str) -> None:
 
 def validate_ipv6_address(address: str) -> None:
     try:
-        ipaddress.IPv6Address(address)
+        ip = ipaddress.IPv6Address(address)
+        if address != ip.compressed:
+            raise ValueError("IPv6 address should be in compressed form")
     except ipaddress.AddressValueError as e:
         raise ValueError(f"Invalid IPv6 address: {e}")
     except ipaddress.NetmaskValueError as e:
