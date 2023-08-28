@@ -138,7 +138,7 @@ def validate_onion_address(address: str) -> None:
         raise ValueError("Invalid onion address: missing .onion suffix")
 
     # Remove ".onion" from the address
-    address = address[:-6]  # Slice slicing to remove the last 6 characters (length of ".onion")
+    address = address[:-len('.onion')]  # Slice slicing to remove the last 6 characters (length of ".onion")
 
     try:
         # Initialize the bytearray to hold the decoded service ID
@@ -156,14 +156,14 @@ def validate_onion_address(address: str) -> None:
         if version_byte > 0x03:
             raise ValueError(f"Warning: this is a v{version_byte} onion service, which is newer than the v3 onion services that Electrum-NMC knows how to validate. Please verify that this is what you really meant to enter.")
 
-        if version_byte != 0x03:
+        if version_byte < 0x03:
             raise ValueError(f"Obsolete v{version_byte} onion service")
 
         # Extract the public key from the decoded service ID
         public_key = bytearray(decoded_service_id[:ED25519_PUBLIC_KEY_SIZE])
 
         # Calculate the truncated checksum
-        truncated_checksum = calc_truncated_checksum(public_key)
+        truncated_checksum = calc_onion_truncated_checksum(public_key)
 
         # Check if the truncated checksum matches the corresponding bytes in the decoded service ID
         if truncated_checksum[0] != decoded_service_id[V3_ONION_SERVICE_ID_CHECKSUM_OFFSET] or \
@@ -173,13 +173,12 @@ def validate_onion_address(address: str) -> None:
     except Exception as e:
         raise ValueError(f"Invalid onion address: {e}")
 
-def calc_truncated_checksum(public_key):
+def calc_onion_truncated_checksum(public_key):
     # Define the size of the hash in bytes
-    SHA256_BYTES = 256 // 8
-    hash_bytes = bytearray(SHA256_BYTES)
+    SHA3_256_BYTES = 256 // 8
 
     hasher = hashlib.sha3_256()
-    assert SHA256_BYTES == hasher.digest_size
+    assert SHA3_256_BYTES == hasher.digest_size
 
     # Calculate the checksum
     hasher.update(b".onion checksum")
