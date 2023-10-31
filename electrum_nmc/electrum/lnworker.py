@@ -382,7 +382,7 @@ class LNWorker(Logger, NetworkRetryManager[LNPeerAddr]):
         for srv_ans in srv_answers:
             try:
                 # note: this might block for several seconds
-                answers = dns.resolver.query(srv_ans['host'])
+                answers = dns.resolver.resolve(srv_ans['host'])
             except dns.exception.DNSException as e:
                 self.logger.info(f'failed querying (2) dns seed "{dns_seed}" for ln peers: {repr(e)}')
                 continue
@@ -839,8 +839,13 @@ class LNWallet(LNWorker):
         channels_db[chan.channel_id.hex()] = chan.storage
         for addr in chan.get_wallet_addresses_channel_might_want_reserved():
             self.wallet.set_reserved_state_of_address(addr, reserved=True)
-        self.save_channel(chan)
-        self.wallet.save_backup()
+        try:
+            self.save_channel(chan)
+            self.wallet.save_backup()
+        except:
+            chan.set_state(ChannelState.REDEEMED)
+            self.remove_channel(chan.channel_id)
+            raise
 
     def mktx_for_open_channel(self, *, coins: Sequence[PartialTxInput], funding_sat: int,
                               fee_est=None) -> PartialTransaction:

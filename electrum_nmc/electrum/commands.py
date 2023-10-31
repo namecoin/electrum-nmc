@@ -351,10 +351,10 @@ class Commands:
         return self.config.get_ssl_domain()
 
     @command('')
-    async def make_seed(self, nbits=132, language=None, seed_type=None):
+    async def make_seed(self, nbits=None, language=None, seed_type=None):
         """Create a seed"""
         from .mnemonic import Mnemonic
-        s = Mnemonic(language).make_seed(seed_type, num_bits=nbits)
+        s = Mnemonic(language).make_seed(seed_type=seed_type, num_bits=nbits)
         return s
 
     @command('n')
@@ -668,12 +668,14 @@ class Commands:
         privkeys = privkey.split()
         self.nocheck = nocheck
         #dest = self._resolver(destination)
-        tx = sweep(privkeys,
-                   network=self.network,
-                   config=self.config,
-                   to_address=destination,
-                   fee=tx_fee,
-                   imax=imax)
+        tx = await sweep(
+            privkeys,
+            network=self.network,
+            config=self.config,
+            to_address=destination,
+            fee=tx_fee,
+            imax=imax,
+        )
         return tx.serialize() if tx else None
 
     @command('wp')

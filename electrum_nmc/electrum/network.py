@@ -266,7 +266,11 @@ class Network(Logger, NetworkRetryManager[ServerAddr]):
 
         self.asyncio_loop = asyncio.get_event_loop()
         assert self.asyncio_loop.is_running(), "event loop not running"
-        self._loop_thread = None  # type: threading.Thread  # set by caller; only used for sanity checks
+        try:
+            self._loop_thread = self.asyncio_loop._mythread  # type: threading.Thread  # only used for sanity checks
+        except AttributeError as e:
+            self.logger.warning(f"asyncio loop does not have _mythread set: {e!r}")
+            self._loop_thread = None
 
         assert isinstance(config, SimpleConfig), f"config should be a SimpleConfig instead of {type(config)}"
         self.config = config
@@ -678,7 +682,8 @@ class Network(Logger, NetworkRetryManager[ServerAddr]):
         # However, for headers sub, give preference to this interface
         # over unknown ones, i.e. start it again right away.
         if old_server and old_server != server:
-            await self._close_interface(old_interface)
+            # don't wait for old_interface to close as that might be slow:
+            await self.taskgroup.spawn(self._close_interface(old_interface))
             if len(self.interfaces) <= self.num_server:
                 await self.taskgroup.spawn(self._run_new_interface(old_server))
 
@@ -707,8 +712,9 @@ class Network(Logger, NetworkRetryManager[ServerAddr]):
             with self.interfaces_lock:
                 if self.interfaces.get(interface.server) == interface:
                     self.interfaces.pop(interface.server)
-            if interface.server == self.default_server:
+            if interface == self.interface:
                 self.interface = None
+            # this can take some time if server/connection is slow:
             await interface.close()
 
     @with_recent_servers_lock
@@ -725,8 +731,8 @@ class Network(Logger, NetworkRetryManager[ServerAddr]):
         '''A connection to server either went down, or was never made.
         We distinguish by whether it is in self.interfaces.'''
         if not interface: return
-        server = interface.server
-        if server == self.default_server:
+        # note: don't rely on interface.server for comparisons here
+        if interface == self.interface:
             self._set_status('disconnected')
         await self._close_interface(interface)
         util.trigger_callback('network_updated')
