@@ -1,5 +1,6 @@
 Electrum-NMC - Lightweight Namecoin client
 =====================================
+
 ::
 
   Licence: GNU GPLv3+ for Electrum-DOGE components; CC BY 4.0 for Namecoin logo, MIT Licence for all other components
