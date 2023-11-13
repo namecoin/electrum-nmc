@@ -56,7 +56,7 @@ from .address_synchronizer import TX_HEIGHT_LOCAL
 from .mnemonic import Mnemonic
 from .lnutil import SENT, RECEIVED
 from .lnutil import LnFeatures
-from .lnutil import ln_dummy_address
+from .lnutil import extract_nodeid
 from .lnpeer import channel_id_from_funding_tx
 from .plugin import run_hook
 from .version import ELECTRUM_VERSION
@@ -243,7 +243,8 @@ class Commands:
     @command('n')
     async def stop(self):
         """Stop daemon"""
-        self.daemon.stop()
+        # TODO it would be nice if this could stop the GUI too
+        await self.daemon.stop()
         return "Daemon stopped"
 
     @command('n')
@@ -462,7 +463,7 @@ class Commands:
         """
         keypairs = {}
         inputs = []  # type: List[PartialTxInput]
-        locktime = jsontx.get('lockTime', 0)
+        locktime = jsontx.get('locktime', 0)
         for txin_dict in jsontx.get('inputs'):
             if txin_dict.get('prevout_hash') is not None and txin_dict.get('prevout_n') is not None:
                 prevout = TxOutpoint(txid=bfh(txin_dict['prevout_hash']), out_idx=int(txin_dict['prevout_n']))
@@ -471,7 +472,7 @@ class Commands:
             else:
                 raise Exception("missing prevout for txin")
             txin = PartialTxInput(prevout=prevout)
-            txin._trusted_value_sats = int(txin_dict['value'])
+            txin._trusted_value_sats = int(txin_dict.get('value', txin_dict['value_sats']))
             nsequence = txin_dict.get('nsequence', None)
             if nsequence is not None:
                 txin.nsequence = nsequence
@@ -485,7 +486,7 @@ class Commands:
                 txin.num_sig = 1
             inputs.append(txin)
 
-        outputs = [PartialTxOutput.from_address_and_value(txout['address'], int(txout['value']))
+        outputs = [PartialTxOutput.from_address_and_value(txout['address'], int(txout.get('value', txout['value_sats'])))
                    for txout in jsontx.get('outputs')]
         tx = PartialTransaction.from_io(inputs, outputs, locktime=locktime)
         tx.sign(keypairs)
@@ -494,11 +495,16 @@ class Commands:
     @command('wp')
     async def signtransaction(self, tx, privkey=None, password=None, wallet: Abstract_Wallet = None):
         """Sign a transaction. The wallet keys will be used unless a private key is provided."""
+        # TODO this command should be split in two... (1) *_with_wallet, (2) *_with_privkey
         tx = tx_from_any(tx)
         if privkey:
             txin_type, privkey2, compressed = bitcoin.deserialize_privkey(privkey)
-            pubkey = ecc.ECPrivkey(privkey2).get_public_key_bytes(compressed=compressed).hex()
-            tx.sign({pubkey:(privkey2, compressed)})
+            pubkey = ecc.ECPrivkey(privkey2).get_public_key_bytes(compressed=compressed)
+            for txin in tx.inputs():
+                if txin.address and txin.address == bitcoin.pubkey_to_address(txin_type, pubkey.hex()):
+                    txin.pubkeys = [pubkey]
+                    txin.script_type = txin_type
+            tx.sign({pubkey.hex(): (privkey2, compressed)})
         else:
             wallet.sign_transaction(tx, password)
         return tx.serialize()
@@ -525,14 +531,26 @@ class Commands:
         return {'address':address, 'redeemScript':redeem_script}
 
     @command('w')
-    async def freeze(self, address, wallet: Abstract_Wallet = None):
+    async def freeze(self, address: str, wallet: Abstract_Wallet = None):
         """Freeze address. Freeze the funds at one of your wallet\'s addresses"""
         return wallet.set_frozen_state_of_addresses([address], True)
 
     @command('w')
-    async def unfreeze(self, address, wallet: Abstract_Wallet = None):
+    async def unfreeze(self, address: str, wallet: Abstract_Wallet = None):
         """Unfreeze address. Unfreeze the funds at one of your wallet\'s address"""
         return wallet.set_frozen_state_of_addresses([address], False)
+
+    @command('w')
+    async def freeze_utxo(self, coin: str, wallet: Abstract_Wallet = None):
+        """Freeze a UTXO so that the wallet will not spend it."""
+        wallet.set_frozen_state_of_coins([coin], True)
+        return True
+
+    @command('w')
+    async def unfreeze_utxo(self, coin: str, wallet: Abstract_Wallet = None):
+        """Unfreeze a UTXO so that the wallet might spend it."""
+        wallet.set_frozen_state_of_coins([coin], False)
+        return True
 
     @command('wp')
     async def getprivatekeys(self, address, password=None, wallet: Abstract_Wallet = None):
@@ -1056,10 +1074,13 @@ class Commands:
         await self.broadcast(new_tx)
 
     @command('w')
-    async def onchain_history(self, year=None, show_addresses=False, show_fiat=False, wallet: Abstract_Wallet = None):
+    async def onchain_history(self, year=None, show_addresses=False, show_fiat=False, wallet: Abstract_Wallet = None,
+                              from_height=None, to_height=None):
         """Wallet onchain history. Returns the transaction history of your wallet."""
         kwargs = {
             'show_addresses': show_addresses,
+            'from_height': from_height,
+            'to_height': to_height,
         }
         if year:
             import time
@@ -1071,6 +1092,7 @@ class Commands:
             from .exchange_rate import FxThread
             fx = FxThread(self.config, None)
             kwargs['fx'] = fx
+
         return json_normalize(wallet.get_detailed_history(**kwargs))
 
     @command('w')
@@ -1194,7 +1216,8 @@ class Commands:
             f = None
         out = wallet.get_sorted_requests()
         if f is not None:
-            out = list(filter(lambda x: x.status==f, out))
+            out = [req for req in out
+                   if f == wallet.get_request_status(wallet.get_key_for_receive_request(req))]
         return [wallet.export_request(x) for x in out]
 
     @command('w')
@@ -1591,13 +1614,10 @@ class Commands:
         if not is_hash256_str(txid):
             raise Exception(f"{repr(txid)} is not a txid")
         height = wallet.get_tx_height(txid).height
-        to_delete = {txid}
         if height != TX_HEIGHT_LOCAL:
             raise Exception(f'Only local transactions can be removed. '
                             f'This tx has height: {height} != {TX_HEIGHT_LOCAL}')
-        to_delete |= wallet.get_depending_transactions(txid)
-        for tx_hash in to_delete:
-            wallet.remove_transaction(tx_hash)
+        wallet.remove_transaction(txid)
         wallet.save_db()
 
     @command('wn')
@@ -1640,13 +1660,19 @@ class Commands:
     async def open_channel(self, connection_string, amount, push_amount=0, password=None, wallet: Abstract_Wallet = None):
         funding_sat = satoshis(amount)
         push_sat = satoshis(push_amount)
-        dummy_output = PartialTxOutput.from_address_and_value(ln_dummy_address(), funding_sat)
-        funding_tx = wallet.mktx(outputs = [dummy_output], rbf=False, sign=False, nonlocal_only=True)
-        chan, funding_tx = await wallet.lnworker._open_channel_coroutine(connect_str=connection_string,
-                                                                         funding_tx=funding_tx,
-                                                                         funding_sat=funding_sat,
-                                                                         push_sat=push_sat,
-                                                                         password=password)
+        coins = wallet.get_spendable_coins(None)
+        node_id, rest = extract_nodeid(connection_string)
+        funding_tx = wallet.lnworker.mktx_for_open_channel(
+            coins=coins,
+            funding_sat=funding_sat,
+            node_id=node_id,
+            fee_est=None)
+        chan, funding_tx = await wallet.lnworker._open_channel_coroutine(
+            connect_str=connection_string,
+            funding_tx=funding_tx,
+            funding_sat=funding_sat,
+            push_sat=push_sat,
+            password=password)
         return chan.funding_outpoint.to_str()
 
     @command('')
@@ -1660,7 +1686,7 @@ class Commands:
         lnaddr = lnworker._check_invoice(invoice)
         payment_hash = lnaddr.paymenthash
         wallet.save_invoice(LNInvoice.from_bech32(invoice))
-        success, log = await lnworker._pay(invoice, attempts=attempts)
+        success, log = await lnworker.pay_invoice(invoice, attempts=attempts)
         return {
             'payment_hash': payment_hash.hex(),
             'success': success,
@@ -1675,13 +1701,15 @@ class Commands:
 
     @command('w')
     async def list_channels(self, wallet: Abstract_Wallet = None):
-        # we output the funding_outpoint instead of the channel_id because lnd uses channel_point (funding outpoint) to identify channels
+        # FIXME: we need to be online to display capacity of backups
         from .lnutil import LOCAL, REMOTE, format_short_channel_id
-        l = list(wallet.lnworker.channels.items())
+        channels = list(wallet.lnworker.channels.items())
+        backups = list(wallet.lnworker.channel_backups.items())
         return [
             {
+                'type': 'CHANNEL',
                 'short_channel_id': format_short_channel_id(chan.short_channel_id) if chan.short_channel_id else None,
-                'channel_id': bh2u(chan.channel_id),
+                'channel_id': chan.channel_id.hex(),
                 'channel_point': chan.funding_outpoint.to_str(),
                 'state': chan.get_state().name,
                 'peer_state': chan.peer_state.name,
@@ -1692,7 +1720,15 @@ class Commands:
                 'remote_reserve': chan.config[LOCAL].reserve_sat,
                 'local_unsettled_sent': chan.balance_tied_up_in_htlcs_by_direction(LOCAL, direction=SENT) // 1000,
                 'remote_unsettled_sent': chan.balance_tied_up_in_htlcs_by_direction(REMOTE, direction=SENT) // 1000,
-            } for channel_id, chan in l
+            } for channel_id, chan in channels
+        ] + [
+            {
+                'type': 'BACKUP',
+                'short_channel_id': format_short_channel_id(chan.short_channel_id) if chan.short_channel_id else None,
+                'channel_id': chan.channel_id.hex(),
+                'channel_point': chan.funding_outpoint.to_str(),
+                'state': chan.get_state().name,
+            } for channel_id, chan in backups
         ]
 
     @command('wn')
@@ -1701,14 +1737,13 @@ class Commands:
 
     @command('n')
     async def inject_fees(self, fees):
-        import ast
-        self.network.config.fee_estimates = ast.literal_eval(fees)
-        self.network.notify('fee')
+        # e.g. use from Qt console:  inject_fees("{25: 1009, 10: 15962, 5: 18183, 2: 23239}")
+        fee_est = ast.literal_eval(fees)
+        self.network.update_fee_estimates(fee_est=fee_est)
 
     @command('wn')
     async def enable_htlc_settle(self, b: bool, wallet: Abstract_Wallet = None):
-        e = wallet.lnworker.enable_htlc_settle
-        e.set() if b else e.clear()
+        wallet.lnworker.enable_htlc_settle = b
 
     @command('n')
     async def clear_ln_blacklist(self):
@@ -1726,6 +1761,17 @@ class Commands:
         coro = wallet.lnworker.force_close_channel(chan_id) if force else wallet.lnworker.close_channel(chan_id)
         return await coro
 
+    @command('wn')
+    async def request_force_close(self, channel_point, connection_string=None, wallet: Abstract_Wallet = None):
+        """
+        Requests the remote to force close a channel.
+        If a connection string is passed, can be used without having state or any backup for the channel.
+        Assumes that channel was originally opened with the same local peer (node_keypair).
+        """
+        txid, index = channel_point.split(':')
+        chan_id, _ = channel_id_from_funding_tx(txid, int(index))
+        await wallet.lnworker.request_force_close(chan_id, connect_str=connection_string)
+
     @command('w')
     async def export_channel_backup(self, channel_point, wallet: Abstract_Wallet = None):
         txid, index = channel_point.split(':')
@@ -1734,7 +1780,7 @@ class Commands:
 
     @command('w')
     async def import_channel_backup(self, encrypted, wallet: Abstract_Wallet = None):
-        return wallet.lnbackups.import_channel_backup(encrypted)
+        return wallet.lnworker.import_channel_backup(encrypted)
 
     @command('wn')
     async def get_channel_ctx(self, channel_point, iknowwhatimdoing=False, wallet: Abstract_Wallet = None):
@@ -1773,7 +1819,11 @@ class Commands:
         else:
             lightning_amount_sat = satoshis(lightning_amount)
             onchain_amount_sat = satoshis(onchain_amount)
-            txid = await wallet.lnworker.swap_manager.normal_swap(lightning_amount_sat, onchain_amount_sat, password)
+            txid = await wallet.lnworker.swap_manager.normal_swap(
+                lightning_amount_sat=lightning_amount_sat,
+                expected_onchain_amount_sat=onchain_amount_sat,
+                password=password,
+            )
         return {
             'txid': txid,
             'lightning_amount': format_satoshis(lightning_amount_sat),
@@ -1797,8 +1847,12 @@ class Commands:
             success = None
         else:
             lightning_amount_sat = satoshis(lightning_amount)
-            onchain_amount_sat = satoshis(onchain_amount)
-            success = await wallet.lnworker.swap_manager.reverse_swap(lightning_amount_sat, onchain_amount_sat)
+            claim_fee = sm.get_claim_fee()
+            onchain_amount_sat = satoshis(onchain_amount + claim_fee)
+            success = await wallet.lnworker.swap_manager.reverse_swap(
+                lightning_amount_sat=lightning_amount_sat,
+                expected_onchain_amount_sat=onchain_amount_sat,
+            )
         return {
             'success': success,
             'lightning_amount': format_satoshis(lightning_amount_sat),
@@ -1882,6 +1936,7 @@ command_options = {
     'to_height':   (None, "Only show transactions that confirmed before given block height"),
     'iknowwhatimdoing': (None, "Acknowledge that I understand the full implications of what I am about to do"),
     'gossip':      (None, "Apply command to gossip node instead of wallet"),
+    'connection_string':      (None, "Lightning network node ID or network address"),
     'destination': (None, "Namecoin address, contact or alias"),
     'amount':      (None, "Amount to be sent (in NMC). Type \'!\' to send the maximum available."),
     'outputs':     (None, "Currency outputs to add to a transaction in addition to a name operation."),
@@ -2029,6 +2084,7 @@ def get_parser():
     parser_gui.add_argument("-m", action="store_true", dest="hide_gui", default=False, help="hide GUI on startup")
     parser_gui.add_argument("-L", "--lang", dest="language", default=None, help="default language used in GUI")
     parser_gui.add_argument("--daemon", action="store_true", dest="daemon", default=False, help="keep daemon running after GUI is closed")
+    parser_gui.add_argument("--nosegwit", action="store_true", dest="nosegwit", default=False, help="Do not create segwit wallets")
     add_wallet_option(parser_gui)
     add_network_options(parser_gui)
     add_global_options(parser_gui)

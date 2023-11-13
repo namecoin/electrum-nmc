@@ -73,7 +73,7 @@ class OpenFileEventFilter(QObject):
     def eventFilter(self, obj, event):
         if event.type() == QtCore.QEvent.FileOpen:
             if len(self.windows) >= 1:
-                self.windows[0].pay_to_URI(event.url().toEncoded())
+                self.windows[0].pay_to_URI(event.url().toString())
                 return True
         return False
 
@@ -369,8 +369,6 @@ class ElectrumGui(Logger):
             # check if a wizard is in progress
             with self._num_wizards_lock:
                 if self._num_wizards_in_progress > 0 or len(self.windows) > 0:
-                    return
-                if self.config.get('persist_daemon'):
                     return
             self.app.quit()
         self.app.setQuitOnLastWindowClosed(False)  # so _we_ can decide whether to quit

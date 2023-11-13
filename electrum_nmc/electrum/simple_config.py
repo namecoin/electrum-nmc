@@ -268,6 +268,14 @@ class SimpleConfig(Logger):
             if os.path.exists(self.path):  # or maybe not?
                 raise
 
+    def get_backup_dir(self):
+        # this is used to save a backup everytime a channel is created
+        # on Android, the export backup button uses android_backup_dir()
+        if 'ANDROID_DATA' in os.environ:
+            return None
+        else:
+            return self.get('backup_dir')
+
     def get_wallet_path(self, *, use_gui_last_wallet=False):
         """Set the path of the wallet."""
 
@@ -327,7 +335,7 @@ class SimpleConfig(Logger):
         slider_pos = max(slider_pos, 0)
         slider_pos = min(slider_pos, len(FEE_ETA_TARGETS))
         if slider_pos < len(FEE_ETA_TARGETS):
-            num_blocks = FEE_ETA_TARGETS[slider_pos]
+            num_blocks = FEE_ETA_TARGETS[int(slider_pos)]
             fee = self.eta_target_to_fee(num_blocks)
         else:
             fee = self.eta_target_to_fee(1)
@@ -425,12 +433,16 @@ class SimpleConfig(Logger):
         else:
             return _('Within {} blocks').format(x)
 
-    def get_fee_status(self):
+    def get_fee_target(self):
         dyn = self.is_dynfee()
         mempool = self.use_mempool_fees()
         pos = self.get_depth_level() if mempool else self.get_fee_level()
         fee_rate = self.fee_per_kb()
         target, tooltip = self.get_fee_text(pos, dyn, mempool, fee_rate)
+        return target, tooltip, dyn
+
+    def get_fee_status(self):
+        target, tooltip, dyn = self.get_fee_target()
         return tooltip + '  [%s]'%target if dyn else target + '  [Static]'
 
     def get_fee_text(

@@ -66,6 +66,8 @@ def check_imports():
         import aiorpcx
     except ImportError as e:
         sys.exit(f"Error: {str(e)}. Try 'sudo python3 -m pip install <module-name>'")
+    if not ((0, 18, 7) <= aiorpcx._version < (0, 19)):
+        raise RuntimeError(f'aiorpcX version {aiorpcx._version} does not match required: 0.18.7<=ver<0.19')
     # the following imports are for pyinstaller
     from google.protobuf import descriptor
     from google.protobuf import message
@@ -150,7 +152,7 @@ def init_cmdline(config_options, wallet_path, server, *, config: 'SimpleConfig')
         use_encryption = True
 
     # commands needing password
-    if  ( (cmd.requires_wallet and storage.is_encrypted() and server is False)\
+    if ((cmd.requires_wallet and storage.is_encrypted() and server is False)\
        or (cmdname == 'load_wallet' and storage.is_encrypted())\
        or (cmd.requires_password and use_encryption)):
         if storage.is_encrypted_with_hw_device():
@@ -320,6 +322,7 @@ def main():
             'verbosity': '*' if build_config.DEBUG else '',
             'cmd': 'gui',
             'gui': 'kivy',
+            'single_password':True,
         }
     else:
         config_options = args.__dict__
@@ -347,7 +350,6 @@ def main():
             print_stderr('unknown command:', uri)
             sys.exit(1)
 
-    # singleton
     config = SimpleConfig(config_options)
 
     if config.get('testnet'):

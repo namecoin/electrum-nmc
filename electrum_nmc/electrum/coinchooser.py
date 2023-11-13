@@ -238,7 +238,7 @@ class CoinChooserBase(Logger):
             assert is_address(change_addrs[0])
 
         # This takes a count of change outputs and returns a tx fee
-        output_weight = 4 * Transaction.estimated_output_size(change_addrs[0])
+        output_weight = 4 * Transaction.estimated_output_size_for_address(change_addrs[0])
         fee_estimator_numchange = lambda count: fee_estimator_w(tx_weight + count * output_weight)
         change = self._change_outputs(tx, change_addrs, fee_estimator_numchange, dust_threshold)
         tx.add_outputs(change)
@@ -358,7 +358,7 @@ class CoinChooserRandom(CoinChooserBase):
         # Add all singletons
         for n, bucket in enumerate(buckets):
             if sufficient_funds([bucket], bucket_value_sum=bucket.value):
-                candidates.add((n, ))
+                candidates.add((n,))
 
         # And now some random ones
         attempts = min(100, (len(buckets) - 1) * 10 + 1)

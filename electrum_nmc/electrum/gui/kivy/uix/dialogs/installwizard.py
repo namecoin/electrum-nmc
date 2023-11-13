@@ -130,7 +130,6 @@ Builder.load_string('''
     Widget
         size_hint: 1, 1
     GridLayout:
-        orientation: 'vertical'
         cols: 2
         spacing: '14dp'
         size_hint: 1, 1
@@ -179,7 +178,6 @@ Builder.load_string('''
         size_hint: 1, 1
     GridLayout:
         row_default_height: '48dp'
-        orientation: 'vertical'
         id: choices
         cols: 1
         spacing: '14dp'
@@ -333,7 +331,6 @@ Builder.load_string('''
     text: ''
     options_dialog: None
     rows: 1
-    orientation: 'horizontal'
     size_hint: 1, None
     height: self.minimum_height
     BigLabel:
@@ -358,7 +355,6 @@ Builder.load_string('''
     GridLayout:
         cols: 1
         padding: 0, '12dp'
-        orientation: 'vertical'
         spacing: '12dp'
         size_hint: 1, None
         height: self.minimum_height
@@ -461,7 +457,6 @@ Builder.load_string('''
     GridLayout
         cols: 1
         padding: 0, '12dp'
-        orientation: 'vertical'
         spacing: '12dp'
         size_hint: 1, None
         height: self.minimum_height
@@ -498,7 +493,6 @@ Builder.load_string('''
     GridLayout
         cols: 1
         padding: 0, '12dp'
-        orientation: 'vertical'
         spacing: '12dp'
         size_hint: 1, None
         height: self.minimum_height
@@ -534,7 +528,6 @@ Builder.load_string('''
         pos_hint: {'center_y': .5}
         size_hint_y: None
         height: self.minimum_height
-        orientation: 'vertical'
         spacing: '12dp'
         SeedButton:
             text: root.seed_text
@@ -551,6 +544,7 @@ Builder.load_string('''
         multiline: False
         size_hint: 1, None
         height: '48dp'
+        on_text: Clock.schedule_once(root.on_text)
     SeedLabel:
         text: root.warning
 
@@ -561,7 +555,6 @@ Builder.load_string('''
         text: root.message1
     GridLayout:
         row_default_height: '48dp'
-        orientation: 'vertical'
         id: choices
         cols: 1
         spacing: '14dp'
@@ -792,10 +785,17 @@ class LineDialog(WizardDialog):
         WizardDialog.__init__(self, wizard, **kwargs)
         self.title = kwargs.get('title', '')
         self.message = kwargs.get('message', '')
-        self.ids.next.disabled = False
+        self.ids.next.disabled = True
+        self.test = kwargs['test']
+
+    def get_text(self):
+        return self.ids.passphrase_input.text
+
+    def on_text(self, dt):
+        self.ids.next.disabled = not self.test(self.get_text())
 
     def get_params(self, b):
-        return (self.ids.passphrase_input.text,)
+        return (self.get_text(),)
 
 class CLButton(ToggleButton):
     def on_release(self):
@@ -835,11 +835,12 @@ class ChoiceLineDialog(WizardChoiceDialog):
 class ShowSeedDialog(WizardDialog):
     seed_text = StringProperty('')
     message = _("If you forget your PIN or lose your device, your seed phrase will be the only way to recover your funds.")
-    ext = False
 
     def __init__(self, wizard, **kwargs):
         super(ShowSeedDialog, self).__init__(wizard, **kwargs)
         self.seed_text = kwargs['seed_text']
+        self.opt_ext = True
+        self.is_ext = False
 
     def on_parent(self, instance, value):
         if value:
@@ -848,12 +849,12 @@ class ShowSeedDialog(WizardDialog):
     def options_dialog(self):
         from .seed_options import SeedOptionsDialog
         def callback(ext, _):
-            self.ext = ext
-        d = SeedOptionsDialog(self.ext, None, callback)
+            self.is_ext = ext
+        d = SeedOptionsDialog(self.opt_ext, False, self.is_ext, False, callback)
         d.open()
 
     def get_params(self, b):
-        return (self.ext,)
+        return (self.is_ext,)
 
 
 class WordButton(Button):
@@ -874,16 +875,18 @@ class RestoreSeedDialog(WizardDialog):
         self.ids.text_input_seed.text = ''
         self.message = _('Please type your seed phrase using the virtual keyboard.')
         self.title = _('Enter Seed')
-        self.ext = False
-        self.bip39 = False
+        self.opt_ext = kwargs['opt_ext']
+        self.opt_bip39 = kwargs['opt_bip39']
+        self.is_ext = False
+        self.is_bip39 = False
 
     def options_dialog(self):
         from .seed_options import SeedOptionsDialog
         def callback(ext, bip39):
-            self.ext = ext
-            self.bip39 = bip39
+            self.is_ext = ext
+            self.is_bip39 = bip39
             self.update_next_button()
-        d = SeedOptionsDialog(self.ext, self.bip39, callback)
+        d = SeedOptionsDialog(self.opt_ext, self.opt_bip39, self.is_ext, self.is_bip39, callback)
         d.open()
 
     def get_suggestions(self, prefix):
@@ -892,7 +895,13 @@ class RestoreSeedDialog(WizardDialog):
                 yield w
 
     def update_next_button(self):
-        self.ids.next.disabled = False if self.bip39 else not bool(self._test(self.get_text()))
+        from electrum.keystore import bip39_is_checksum_valid
+        text = self.get_text()
+        if self.is_bip39:
+            is_seed, is_wordlist = bip39_is_checksum_valid(text)
+        else:
+            is_seed = bool(self._test(text))
+        self.ids.next.disabled = not is_seed
 
     def on_text(self, dt):
         self.update_next_button()
@@ -980,7 +989,7 @@ class RestoreSeedDialog(WizardDialog):
             tis.focus = False
 
     def get_params(self, b):
-        return (self.get_text(), self.bip39, self.ext)
+        return (self.get_text(), self.is_bip39, self.is_ext)
 
 
 class ConfirmSeedDialog(RestoreSeedDialog):
@@ -1091,9 +1100,13 @@ class InstallWizard(BaseWizard, Widget):
     def confirm_seed_dialog(self, **kwargs):
         kwargs['title'] = _('Confirm Seed')
         kwargs['message'] = _('Please retype your seed phrase, to confirm that you properly saved it')
+        kwargs['opt_bip39'] = self.opt_bip39
+        kwargs['opt_ext'] = self.opt_ext
         ConfirmSeedDialog(self, **kwargs).open()
 
     def restore_seed_dialog(self, **kwargs):
+        kwargs['opt_bip39'] = self.opt_bip39
+        kwargs['opt_ext'] = self.opt_ext
         RestoreSeedDialog(self, **kwargs).open()
 
     def confirm_dialog(self, **kwargs):
@@ -1128,9 +1141,8 @@ class InstallWizard(BaseWizard, Widget):
         Clock.schedule_once(lambda dt: self.app.show_error(msg))
 
     def request_password(self, run_next, force_disable_encrypt_cb=False):
-        if force_disable_encrypt_cb:
-            # do not request PIN for watching-only wallets
-            run_next(None, False)
+        if self.app.password is not None:
+            run_next(self.app.password, True)
             return
         def on_success(old_pw, pw):
             assert old_pw is None
