@@ -133,6 +133,8 @@ def validate_value_length(value: bytes):
         raise BitcoinException('value length {} exceeds limit of {}'.format(value_length, value_length_limit))
 
 def validate_onion_address(address: str) -> None:
+    if not address == address.lower():
+        raise ValueError("Invalid onion address: must be in lowercase")
     # Verify and remove ".onion" from the address if present
     if not address.endswith(".onion"):
         raise ValueError("Invalid onion address: missing .onion suffix")
@@ -141,11 +143,8 @@ def validate_onion_address(address: str) -> None:
     address = address[:-len('.onion')]  # Slice slicing to remove the last 6 characters (length of ".onion")
 
     try:
-        # Initialize the bytearray to hold the decoded service ID
-        decoded_service_id = bytearray([0] * V3_ONION_SERVICE_ID_RAW_SIZE)
-
         # Decode the service ID from base32 into the decoded_service_id bytearray
-        decoded_service_id = base64.b32decode(address.encode(), decoded_service_id)
+        decoded_service_id = base64.b32decode(address.upper().encode())
 
         # Check decoded service ID has the expected length
         if len(decoded_service_id) != V3_ONION_SERVICE_ID_RAW_SIZE:
@@ -178,7 +177,6 @@ def calc_onion_truncated_checksum(public_key):
     SHA3_256_BYTES = 256 // 8
 
     hasher = hashlib.sha3_256()
-    assert SHA3_256_BYTES == hasher.digest_size
 
     # Calculate the checksum
     hasher.update(b".onion checksum")
@@ -1469,4 +1467,3 @@ V3_ONION_SERVICE_ID_RAW_SIZE= 35
 V3_ONION_SERVICE_ID_VERSION_OFFSET = 34
 ED25519_PUBLIC_KEY_SIZE = 32
 V3_ONION_SERVICE_ID_CHECKSUM_OFFSET = 32
-BASE32_LENGTH = 32
