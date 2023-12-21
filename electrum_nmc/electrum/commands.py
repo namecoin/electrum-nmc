@@ -1543,6 +1543,8 @@ class Commands:
                 offers_with_acceptable_price.append(candidate_offer)
             except NameTradePriceMismatchError:
                 pass
+            except NotEnoughFunds:
+                pass
 
         best_offer = None
         best_locktime = None

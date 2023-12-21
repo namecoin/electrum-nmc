@@ -105,6 +105,29 @@ fi
 if [[ $1 == "stop" ]]; then
     agent="./run_electrum_nmc --regtest -D /tmp/$2"
     $agent stop || true
+
+    # When testing GUI we need to close the windows when stopping the daemon
+    if [[ ${ELECTRUM_MODE:-} == "GUI" ]]; then
+        pid_file="/tmp/$2.pid"
+        wine_pid_file="/tmp/$2.wine_pid"
+
+ 	# Check if the process with the stored PID exists and is running
+        if [ -f "$pid_file" ]; then
+            pid=$(<"$pid_file")
+            kill $pid
+	    echo "Stopping PID: $pid" 
+            rm -f "$pid_file"
+        fi
+
+ 	# Additional PID is be spawned during Windows tests. We terminate it here.
+        if [[ ${Binaries:-} == "WINE" && -f "$wine_pid_file" ]]; then
+            wine_pid=$(<"$wine_pid_file")
+            kill $wine_pid
+	    echo "Stopping PID: $wine_pid"
+            rm -f "$wine_pid_file"
+        fi
+	sleep 10
+    fi
 fi
 
 if [[ $1 == "forwarding" ]]; then
