@@ -144,7 +144,7 @@ def validate_onion_address(address: str) -> None:
 
     try:
         # Decode the service ID from base32 into the decoded_service_id bytearray
-        decoded_service_id = base64.b32decode(address.upper().encode())
+        decoded_service_id = base64.b32decode(address.encode(), casefold=True)
 
         # Check decoded service ID has the expected length
         if len(decoded_service_id) != V3_ONION_SERVICE_ID_RAW_SIZE:
