@@ -134,26 +134,25 @@ def validate_value_length(value: bytes):
 
 def validate_i2p_address(address: str) -> None:
     try:
+        # Check if it ends with '.b32.i2p'
+        if not address.endswith('.b32.i2p'):
+            raise ValueError("Address doesn't end with '.b32.i2p'")
+        
+        # remove '.b32.i2p'
+        address = address[:-len('.b32.i2p')] 
         # Check length
         if len(address) > 67:
             raise ValueError("Address length exceeds 67 characters")
 
-        # Check if it ends with '.b32.i2p'
-        if address.endswith('.b32.i2p'):
-            # remove '.b32.i2p'
-            address = address[:-len('.b32.i2p')] 
-            # Add padding  
-            padding_needed = (8 - len(address) % 8)
-            padded_address = address + '=' * padding_needed
+        # Add padding  
+        padding_needed = (8 - len(address) % 8)
+        padded_address = address + '=' * padding_needed
 
-            decoded = base64.b32decode(padded_address, casefold=True)
-            if len(decoded) != BASE32_LENGTH:
-                raise ValueError("Invalid length for base32 hash")
-
-        else:
-            raise ValueError("Address doesn't end with '.b32.i2p'")
+        decoded = base64.b32decode(padded_address, casefold=True)
+        if len(decoded) != BASE32_LENGTH:
+            raise ValueError("Invalid length for base32 hash")
             
-    except (base64.binascii.Error, ValueError) as e:
+    except Exception as e:
         raise ValueError(f"Invalid I2P address: {e}")
     
 def build_name_new(identifier: bytes, salt: bytes = None, address: str = None, password: str = None, wallet = None):
