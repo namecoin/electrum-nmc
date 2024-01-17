@@ -132,6 +132,20 @@ def validate_value_length(value: bytes):
     if value_length > value_length_limit:
         raise BitcoinException('value length {} exceeds limit of {}'.format(value_length, value_length_limit))
 
+def validate_master_nameserver(domain: str) -> None:
+    if domain.endswith('.'):
+        relative_domain = domain[:-1]
+        if not validators.domain(relative_domain):
+            raise ValueError(f'Invalid domain: {domain}')
+    
+    else:
+        if not validators.domain(domain):
+            raise ValueError(f'Invalid domain: {domain}')
+        
+        TLD = tldextract.extract(domain).suffix
+        if not TLD:
+            raise ValueError(f'Unrecognized TLD which might indicate an error: {domain}')
+        
 def build_name_new(identifier: bytes, salt: bytes = None, address: str = None, password: str = None, wallet = None):
     validate_identifier_length(identifier)
 
@@ -1397,6 +1411,8 @@ from datetime import datetime, timedelta
 import json
 import os
 import re
+import tldextract
+import validators
 
 from .bitcoin import push_script, script_to_scripthash
 from .crypto import hash_160
