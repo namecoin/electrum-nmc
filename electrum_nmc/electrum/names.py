@@ -132,6 +132,9 @@ def validate_value_length(value: bytes):
     if value_length > value_length_limit:
         raise BitcoinException('value length {} exceeds limit of {}'.format(value_length, value_length_limit))
 
+def validate_TLS(Public_Key: str) -> None:
+    a2b_base64(Public_Key)
+    
 def build_name_new(identifier: bytes, salt: bytes = None, address: str = None, password: str = None, wallet = None):
     validate_identifier_length(identifier)
 
@@ -1402,6 +1405,7 @@ from .bitcoin import push_script, script_to_scripthash
 from .crypto import hash_160
 from .transaction import MalformedBitcoinScript, match_script_against_template, opcodes, OPPushDataGeneric, PartialTransaction, script_GetOp, Transaction
 from .util import bh2u, bfh, BitcoinException
+from .pem import a2b_base64
 
 OP_NAME_NEW = opcodes.OP_1
 OP_NAME_FIRSTUPDATE = opcodes.OP_2
