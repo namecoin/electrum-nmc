@@ -132,18 +132,34 @@ def validate_value_length(value: bytes):
     if value_length > value_length_limit:
         raise BitcoinException('value length {} exceeds limit of {}'.format(value_length, value_length_limit))
 
-def validate_DNSSEC(Hash: str, HashType:str) -> None:
+def validate_DNSSEC(Hash: str, HashType: int, Algorithm: int) -> None:
+    # DNSSEC Algorithm Numbers: https://www.iana.org/assignments/dns-sec-alg-numbers/dns-sec-alg-numbers.xhtml
+    # DS RR Types (Hash Types): https://www.iana.org/assignments/ds-rr-types/ds-rr-types.xhtml#ds-rr-types-1
     try:
+        # Decode the base64 hash to ensure it's valid base64
         a2b_base64(Hash)
 
+        # Validate HashType
         match HashType:
             case 1:
-                raise Exception("HashType 1 is considered weak due to vulnerabilities to collision attacks.")
-            case _ if HashType > 4 or HashType < 1:
-                raise Exception(f"HashType {HashType} is unsupported.")
+                raise Exception("Warning: SHA-1 (HashType 1) is considered weak due to vulnerabilities to collision attacks.")
+            case 2:
+                pass  # SHA-256 is accepted
+            case _:
+                raise Exception(f"Warning: HashType {HashType} is unsupported. Only '1' (SHA-1) and '2' (SHA-256) are allowed.")
+
+        if Algorithm in [8,10,15,16]:
+            # Accept the algorithms (RSASHA256, RSASHA512, ED25519, and ED448)
+            pass 
+        elif Algorithm in [1,3,5,6,7]:
+            raise Exception(f"Warning: Algorithm {Algorithm} is considered weak and prone to security vulnerabilities.")
+        elif Algorithm in [13,14]:
+            raise Exception(f"Warning: Algorithm {Algorithm} can be prone to implementation errors.")
+        else:
+            raise Exception(f"Warning: Algorithm {Algorithm} is unsupported.")
 
     except Exception as e:
-        raise SyntaxError(f"{e}")
+        raise SyntaxError(f"Error: {e}")
     
 def build_name_new(identifier: bytes, salt: bytes = None, address: str = None, password: str = None, wallet = None):
     validate_identifier_length(identifier)
