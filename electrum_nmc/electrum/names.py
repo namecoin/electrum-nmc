@@ -28,6 +28,11 @@ from typing import Dict, NamedTuple, Optional
 
 from . import constants
 
+try:
+    from .tld_list import tld_set
+except Exception:
+    tld_set = {}
+    
 def split_name_script(decoded):
     # This case happens if a script was malformed and couldn't be decoded by
     # transaction.get_address_from_output_script.
@@ -132,18 +137,62 @@ def validate_value_length(value: bytes):
     if value_length > value_length_limit:
         raise BitcoinException('value length {} exceeds limit of {}'.format(value_length, value_length_limit))
 
-def validate_cname(domain: str) -> None:
+def fetch_tld_list():
+    def retrive_tld_list():
+        url = 'https://data.iana.org/TLD/tlds-alpha-by-domain.txt'
+        response = requests.get(url)
+        if response.status_code == 200:
+            return response.text.split('\n')[1:]  # Skip the first line as it contains the version/date
+        return None
+
+    tld_list = retrive_tld_list()
+    if tld_list is not None:  # Check for reasonable list size
+        # Prepare the set as a string to write it directly into the .py file
+        tld_set_str = "{" + ", ".join(f"'{tld.strip().lower()}'" for tld in tld_list if tld.strip()) + "}"
+    else:
+        print("Failed to fetch the TLD list, TLD validation will not work.")
+        tld_set_str = "{}"  # Assign None if the fetch operation fails or the data is not valid
+
+    # Get the directory of the script file
+    script_directory = os.path.dirname(os.path.abspath(__file__))
+    module_file_path = os.path.join(script_directory, 'tld_list.py')
+
+    # Write the set (or None) directly into the Python module
+    with open(module_file_path, 'w') as f:
+        f.write("# This file is auto-generated. Do not edit directly.\n")
+        f.write(f"tld_set = {tld_set_str}\n")
+
+def validate_domains(domain: str) -> None:
+    def validate_relative_domain(value: str, /, *, rfc_1034: bool = False, rfc_2782: bool = False):
+        if not value:
+            return False
+        try:
+            return not re.search(r"\s", value) and re.match(
+                # First character of the domain
+                rf"^(?:[a-zA-Z0-9{'_'if rfc_2782 else ''}]"
+                # Sub domain + hostname
+                + r"(?:[a-zA-Z0-9-_]{0,61}[A-Za-z0-9])?\.)"
+                # First 61 characters of the gTLD
+                + r"+[A-Za-z0-9][A-Za-z0-9-_]{0,61}"
+                # Last character of the gTLD
+                + rf"[A-Za-z]{r'.$' if rfc_1034 else r'$'}",
+                value.encode("idna").decode("utf-8"),
+                re.IGNORECASE,
+            )
+        except UnicodeError:
+            return False
+        
     if domain.endswith('.'):
         relative_domain = domain[:-1]
-        if not validators.domain(relative_domain):
+        if not validate_relative_domain(relative_domain):
             raise ValueError(f'Invalid domain: {domain}')
     
     else:
-        if not validators.domain(domain):
+        if not validate_relative_domain(domain):
             raise ValueError(f'Invalid domain: {domain}')
         
-        TLD = tldextract.extract(domain).suffix
-        if TLD:
+        TLD = domain.split('.')[-1].lower()
+        if TLD in tld_set:
             raise ValueError(f'Recognized TLD which might indicate an invalid domain.: {domain}')
         
 def build_name_new(identifier: bytes, salt: bytes = None, address: str = None, password: str = None, wallet = None):
