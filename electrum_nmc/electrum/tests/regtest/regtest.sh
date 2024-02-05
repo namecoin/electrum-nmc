@@ -105,6 +105,25 @@ fi
 if [[ $1 == "stop" ]]; then
     agent="./run_electrum_nmc --regtest -D /tmp/$2"
     $agent stop || true
+
+     # When testing GUI we need to close the windows when stopping the daemon
+    if [[ ${ELECTRUM_MODE:-} == "GUI" ]]; then
+    	pid_file="/tmp/$2.pid"
+	if [ -f "$pid_file" ]; then
+		pid=$(cat "$pid_file")
+	
+	        # Check if the process with the stored PID exists and is running
+	        if ps -p $pid > /dev/null; then
+	            echo "Stopping PID: $pid"
+	            kill $pid
+	        else
+	            echo "Process with PID $pid not found or already stopped."
+		fi
+	
+	        # Remove the PID file
+	        rm -f "$pid_file"
+	 fi
+  fi
 fi
 
 if [[ $1 == "forwarding" ]]; then
