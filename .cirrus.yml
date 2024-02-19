@@ -152,6 +152,20 @@ task:
         - sleep 10s
         # Use GUI instead of daemon and only change the one in start only (Not to affect the test_unixsockets
         - sed -i '/if \[\[ \$1 == "start" \]\]; then/,/fi/ s/\$agent daemon -d/$agent gui >test.log 2>\&1 \& sleep 15\n pid=$!\necho $pid > "\/tmp\/$2.pid"/' electrum_nmc/electrum/tests/regtest/regtest.sh
+    - env:
+        ELECTRUM_MODE: "GUI"
+        QT_QPA_PLATFORM: "offscreen"
+        Binaries: "WINE"
+      wine_script:
+        - dpkg --add-architecture i386
+        - apt-get update
+        - apt-get -y install  wine-development wine32-development
+        - VERSION=$(git describe --tags --dirty --always | cut -c 1-9)
+        - curl -o namecoin.exe https://api.cirrus-ci.com/v1/artifact/build/$CIRRUS_BUILD_ID/Windows%20build/binaries/contrib/build-wine/dist/electrum-nmc-$VERSION.exe
+        # wine_pid represents the PID of the GUI process launched by Wine
+        - sed -i '/if \[\[ \$1 == "start" \]\]; then/,/fi/ s/\$agent daemon -d/wine namecoin.exe --regtest -D \/tmp\/$2 gui > \/dev\/null 2>\&1 \&\n pid=$!\necho $pid > "\/tmp\/$2.pid"\n sleep 20\n wine_pid=$(pgrep -f "namecoin.exe" | tail -n 1 | awk '\''{print $1}'\'')\n echo $wine_pid > "\/tmp\/$2.wine_pid"/' electrum_nmc/electrum/tests/regtest/regtest.sh
+      depends_on:
+        - "Windows build"
   regtest_script:
     - sleep 10s
     - python3 -m unittest electrum_nmc/electrum/tests/regtest.py
