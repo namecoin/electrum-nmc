@@ -770,7 +770,7 @@ class Commands:
         return result
 
     @command('wp')
-    async def name_new(self, identifier=None, name_encoding='ascii', commitment=None, destination=None, amount=0.0, outputs=[], fee=None, feerate=None, from_addr=None, from_coins=None, change_addr=None, nocheck=False, unsigned=False, rbf=None, password=None, locktime=None, allow_existing=False, wallet: Abstract_Wallet = None, commitment_only=False, no_precheck=False, allow_early=False):
+    async def name_new(self, identifier=None, name_encoding='ascii', commitment=None, destination=None, amount=0.0, outputs=[], fee=None, feerate=None, from_addr=None, from_coins=None, change_addr=None, nocheck=False, unsigned=False, rbf=None, password=None, locktime=None, allow_existing=False, wallet: Abstract_Wallet = None, commitment_only=False):
         """Create a name pre-registration transaction. """
         self.nocheck = nocheck
 

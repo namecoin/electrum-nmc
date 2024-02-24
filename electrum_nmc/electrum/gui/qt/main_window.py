@@ -3463,7 +3463,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
 
         self.gift_layout = self.buy_names_ui.horizontalLayout_giftName
         self.gift_layout.insertWidget(1, self.ExtraAmount_Label)
-        self.gift_layout.insertWidget(2, self.extra_amount_e )
+        self.gift_layout.insertWidget(2, self.extra_amount_e)
 
         self.hide_register_ui()
 
