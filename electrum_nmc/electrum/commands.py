@@ -770,7 +770,7 @@ class Commands:
         return result
 
     @command('wp')
-    async def name_new(self, identifier=None, name_encoding='ascii', commitment=None, destination=None, amount=0.0, outputs=[], fee=None, feerate=None, from_addr=None, from_coins=None, change_addr=None, nocheck=False, unsigned=False, rbf=None, password=None, locktime=None, allow_existing=False, wallet: Abstract_Wallet = None):
+    async def name_new(self, identifier=None, name_encoding='ascii', commitment=None, destination=None, amount=0.0, outputs=[], fee=None, feerate=None, from_addr=None, from_coins=None, change_addr=None, nocheck=False, unsigned=False, rbf=None, password=None, locktime=None, allow_existing=False, wallet: Abstract_Wallet = None, commitment_only=False, no_precheck=False, allow_early=False):
         """Create a name pre-registration transaction. """
         self.nocheck = nocheck
 
@@ -819,6 +819,9 @@ class Commands:
         else:
             name_op, salt = {"op": OP_NAME_NEW, "commitment": commitment_bytes}, None
             salt_hex = None
+
+        if commitment_only:
+            return {"tx": None, "txid": None, "salt": None, "commitment": commitment}
 
         final_outputs = []
         for o_address, o_amount in outputs:
@@ -1952,6 +1955,7 @@ command_options = {
     'trigger_txid':(None, "Broadcast the transaction when this txid reaches the specified number of confirmations"),
     'trigger_name':(None, "Broadcast the transaction when this name reaches the specified number of confirmations"),
     'options':     (None, "Options in Namecoin-Core-style dict"),
+    'commitment_only': (None, "Only return the pre-registration commitment (use if you're pre-registering a name for someone else)"),
 }
 
 

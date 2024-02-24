@@ -1263,7 +1263,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
         title = _('Invoice') if is_lightning else _('Address')
         self.do_copy(content, title=title)
 
-    def create_bitcoin_request(self, amount, message, expiration) -> Optional[str]:
+    def address_creation(self):
         addr = self.wallet.get_unused_address()
         if addr is None:
             if not self.wallet.is_deterministic():  # imported wallet
@@ -1280,7 +1280,14 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
                 if not self.question(_("Warning: The next address will not be recovered automatically if you restore your wallet from seed; you may need to add it manually.\n\nThis occurs because you have too many unused addresses in your wallet. To avoid this situation, use the existing addresses first.\n\nCreate anyway?")):
                     return
                 addr = self.wallet.create_new_address(False)
-        req = self.wallet.make_payment_request(addr, amount, message, expiration)
+        
+        return addr
+
+    def create_bitcoin_request(self, amount, message, expiration, commitment=None, addr=None) -> Optional[str]:
+        if not addr:
+            addr = self.address_creation()
+
+        req = self.wallet.make_payment_request(addr, amount, message, expiration, commitment)
         try:
             self.wallet.add_payment_request(req)
         except Exception as e:
@@ -3447,12 +3454,118 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
 
         self.buy_names_register_button = self.buy_names_ui.registerNameButton
         self.buy_names_register_button.clicked.connect(self.register_new_name)
-        self.buy_names_register_button.hide()
+        
+        self.gift_names_button = self.buy_names_ui.btnGiftButton
+        self.gift_names_button.clicked.connect(self.request_new_name)
+        
+        self.ExtraAmount_Label = QLabel(_('Extra Amount:'))
+        self.extra_amount_e = BTCAmountEdit(self.get_decimal_point)
+
+        self.gift_layout = self.buy_names_ui.horizontalLayout_giftName
+        self.gift_layout.insertWidget(1, self.ExtraAmount_Label)
+        self.gift_layout.insertWidget(2, self.extra_amount_e )
+
+        self.hide_register_ui()
 
         return w
 
-    def update_buy_names_preview(self):
+    def hide_register_ui(self):
         self.buy_names_register_button.hide()
+        self.gift_names_button.hide()
+        self.ExtraAmount_Label.hide()
+        self.extra_amount_e.hide()
+
+    def show_register_ui(self):
+        self.buy_names_register_button.show()
+        self.gift_names_button.show()
+        self.ExtraAmount_Label.show()
+        self.extra_amount_e.show()
+
+    def request_new_name(self):
+        identifier_hex = self.buy_names_new_name_hex_lineedit.text()
+        identifier = name_from_str(identifier_hex, Encoding.HEX)
+        identifier_formatted = format_name_identifier(identifier)
+
+        name_new = self.console.namespace.get('name_new')
+        addr = self.address_creation()
+
+        name_new_result = name_new(identifier=identifier_hex, name_encoding=Encoding.HEX, destination=addr, unsigned=True, commitment_only=True)
+        commitment = name_new_result["commitment"]
+
+        extra_amount = self.extra_amount_e.get_amount()
+        extra_amount = extra_amount if extra_amount else 0
+        amount = extra_amount + (COIN // 100)
+        message = f"Pre-registration: {identifier_formatted}"
+
+        # Expiry set to Never
+        key = self.create_bitcoin_request(amount, message, 0,addr=addr, commitment=commitment)
+        if not key:
+            return
+        self.address_list.update()
+        assert key is not None
+        self.request_list.update()
+        self.request_list.select_key(key)
+        
+        req = self.wallet.receive_requests.get(key)
+        URI = self.wallet.get_request_URI(req)
+ 
+        self.display_request_tab(URI, req.get_address())
+
+    def display_request_tab(self, payment_uri, address):
+        receive_payreq_e = ButtonsTextEdit()
+        receive_payreq_e.setFont(QFont(MONOSPACE_FONT))
+        receive_payreq_e.addCopyButton(self.app)
+        receive_payreq_e.setReadOnly(True)
+        receive_payreq_e.setFocusPolicy(Qt.ClickFocus)
+
+        receive_qr = QRCodeWidget(fixedSize=220)
+        receive_qr.mouseReleaseEvent = lambda x: self.toggle_qr_window()
+        receive_qr.enterEvent = lambda x: self.app.setOverrideCursor(QCursor(Qt.PointingHandCursor))
+        receive_qr.leaveEvent = lambda x: self.app.setOverrideCursor(QCursor(Qt.ArrowCursor))
+        
+        receive_address_e = ButtonsTextEdit()
+        receive_address_e.setFont(QFont(MONOSPACE_FONT))
+        receive_address_e.addCopyButton(self.app)
+        receive_address_e.setReadOnly(True)
+        # Incase update_receive_address_styling triggers a warning, it will be shown only in the receive tab
+        receive_address_e.textChanged.connect(self.update_receive_address_styling)
+
+        receive_payreq_e.setText(payment_uri)
+        receive_address_e.setText(address)
+
+        qr_show = lambda: self.show_qrcode(str(receive_address_e.text()), _('Receiving address'), parent=self)
+        qr_icon = "qrcode_white.png" if ColorScheme.dark_scheme else "qrcode.png"
+        receive_address_e.addButton(qr_icon, qr_show, _("Show as QR code"))
+
+
+        uri = str(receive_payreq_e.text())
+        receive_qr.setData(uri)
+        if self.qr_window and self.qr_window.isVisible():
+            self.qr_window.qrw.setData(uri)
+
+
+        receive_tabs = QTabWidget()
+        receive_tabs.addTab(receive_address_e, _('Address'))
+        receive_tabs.addTab(receive_payreq_e, _('Request'))
+        receive_tabs.addTab(receive_qr, _('QR Code'))
+        receive_tabs.setCurrentIndex(self.config.get('receive_tabs_index', 0))
+        receive_tabs.currentChanged.connect(lambda i: self.config.set_key('receive_tabs_index', i))
+        receive_tabs_sp = receive_tabs.sizePolicy()
+        receive_tabs_sp.setRetainSizeWhenHidden(True)
+        receive_tabs.setSizePolicy(receive_tabs_sp)
+
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Name Request (Available in Receive)")
+
+        dialog_layout = QVBoxLayout()
+        dialog.setLayout(dialog_layout)
+        dialog_layout.addWidget(receive_tabs)
+
+        dialog.show()
+
+    def update_buy_names_preview(self):
+        self.hide_register_ui()
         self.buy_names_status_label.setText("")
         try:
             identifier_hex = self.buy_names_new_name_hex_lineedit.text()
@@ -3605,31 +3718,31 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
             return
 
         if chain_syncing:
-            self.buy_names_register_button.hide()
+            self.hide_register_ui()
             self.buy_names_status_label.setText(_("The blockchain is still syncing; please wait and then try again."))
         elif not name_valid:
-            self.buy_names_register_button.hide()
+            self.hide_register_ui()
             self.buy_names_status_label.setText(_("That name is invalid (probably exceeded the 255-byte limit) and therefore cannot be registered."))
         elif name_mine:
-            self.buy_names_register_button.hide()
+            self.hide_register_ui()
             self.buy_names_status_label.setText(_("You already own ") + identifier_formatted + _("!"))
         elif name_pending_mine:
-            self.buy_names_register_button.hide()
+            self.hide_register_ui()
             self.buy_names_status_label.setText(_("You already have a registration pending for ") + identifier_formatted + _("!"))
         elif name_snipe_pending_mine:
-            self.buy_names_register_button.hide()
+            self.hide_register_ui()
             self.buy_names_status_label.setText(_("You already have a snipe pending for ") + identifier_formatted + _("!  Your snipe will be broadcast if/when the name expires."))
         elif name_exists and not name_pending_unverified:
-            self.buy_names_register_button.hide()
+            self.hide_register_ui()
             self.buy_names_status_label.setText(identifier_formatted + _(" is already registered, sorry!"))
         elif name_pending_unverified:
-            self.buy_names_register_button.show()
+            self.show_register_ui()
             if name_mine_unverified:
                 self.buy_names_status_label.setText(_("The server reports that you already registered ") + identifier_formatted + _(" in approximately the past 2 hours, but Electrum-NMC couldn't verify this.  If you believe the server is wrong, you can try to register it, but you may forfeit the name registration fee."))
             else:
                 self.buy_names_status_label.setText(_("The server reports that someone else already registered ") + identifier_formatted + _(" in approximately the past 2 hours, but Electrum-NMC couldn't verify this.  If you believe the server is wrong, you can try to register it, but you may forfeit the name registration fee."))
         else:
-            self.buy_names_register_button.show()
+            self.show_register_ui()
             self.buy_names_status_label.setText(identifier_formatted + _(" is available to register!"))
 
     def register_new_name(self):

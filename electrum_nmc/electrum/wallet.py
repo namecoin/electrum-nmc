@@ -2157,6 +2157,8 @@ class Abstract_Wallet(AddressSynchronizer, ABC):
             extra_query_params['time'] = str(int(req.time))
         if req.exp:
             extra_query_params['exp'] = str(int(req.exp))
+        if req.commitment:
+            extra_query_params['commitment'] = str(req.commitment)
         #if req.get('name') and req.get('sig'):
         #    sig = bfh(req.get('sig'))
         #    sig = bitcoin.base_encode(sig, base=58)
@@ -2290,7 +2292,7 @@ class Abstract_Wallet(AddressSynchronizer, ABC):
                 status = self.get_request_status(addr)
                 util.trigger_callback('request_status', self, addr, status)
 
-    def make_payment_request(self, address, amount_sat, message, expiration):
+    def make_payment_request(self, address, amount_sat, message, expiration, commitment=None):
         # TODO maybe merge with wallet.create_invoice()...
         #      note that they use incompatible "id"
         amount_sat = amount_sat or 0
@@ -2308,6 +2310,7 @@ class Abstract_Wallet(AddressSynchronizer, ABC):
             bip70=None,
             requestor=None,
             height=self.get_local_height(),
+            commitment=commitment,
         )
 
     def sign_payment_request(self, key, alias, alias_addr, password):  # FIXME this is broken
