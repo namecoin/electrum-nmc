@@ -3474,6 +3474,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
         self.gift_names_button.hide()
         self.ExtraAmount_Label.hide()
         self.extra_amount_e.hide()
+        self.extra_amount_e.clear()
 
     def show_register_ui(self):
         self.buy_names_register_button.show()
@@ -3508,7 +3509,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
         
         req = self.wallet.receive_requests.get(key)
         URI = self.wallet.get_request_URI(req)
- 
+
+        self.extra_amount_e.clear()
         self.display_request_tab(URI, req.get_address())
 
     def display_request_tab(self, payment_uri, address):
