@@ -3493,55 +3493,39 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
         self.extra_amount_e.show()
 
     def request_new_name(self):
-        identifier_hex = self.buy_names_new_name_hex_lineedit.text()
-        identifier = name_from_str(identifier_hex, Encoding.HEX)
-        identifier_formatted = format_name_identifier(identifier)
+        try:
+            identifier_hex = self.buy_names_new_name_hex_lineedit.text()
+            identifier = name_from_str(identifier_hex, Encoding.HEX)
+            identifier_formatted = format_name_identifier(identifier)
 
-        name_new = self.console.namespace.get('name_new')
-        addr = self.address_creation()
+            name_new = self.console.namespace.get('name_new')
+            addr = self.address_creation()
 
-        name_new_result = name_new(identifier=identifier_hex, name_encoding=Encoding.HEX, destination=addr, unsigned=True, commitment_only=True)
-        commitment = name_new_result["commitment"]
+            name_new_result = name_new(identifier=identifier_hex, name_encoding=Encoding.HEX, destination=addr, unsigned=True, commitment_only=True)
+            commitment = name_new_result["commitment"]
 
-        extra_amount = self.extra_amount_e.get_amount()
-        extra_amount = extra_amount if extra_amount else 0
-        amount = extra_amount + (COIN // 100)
-        message = f"Pre-registration: {identifier_formatted}"
+            extra_amount = self.extra_amount_e.get_amount() or 0
+            amount = extra_amount + (COIN // 100)
+            message = f"Pre-registration: {identifier_formatted}"
 
-        # Expiry set to Never
-        key = self.create_bitcoin_request(amount, message, 0,addr=addr, commitment=commitment)
-        if not key:
-            return
-        self.address_list.update()
-        assert key is not None
-        self.request_list.update()
-        self.request_list.select_key(key)
+            # Expiry set to Never
+            key = self.create_bitcoin_request(amount, message, 0,addr=addr, commitment=commitment)
+            if not key:
+                return
+            self.address_list.update()
+            self.request_list.update()
+            self.request_list.select_key(key)
 
-        req = self.wallet.receive_requests.get(key)
-        URI = self.wallet.get_request_URI(req)
+            req = self.wallet.receive_requests.get(key)
+            URI = self.wallet.get_request_URI(req)
 
-        self.extra_amount_e.clear()
-        self.display_request_tab(URI, req.get_address())
+            self.extra_amount_e.clear()
+            self.display_request_tab(URI, req.get_address())
+        except Exception as e:
+            raise ValueError(f"Failed to request new name: {e}")
 
-    def display_request_tab(self, payment_uri, address):
-        receive_payreq_e = ButtonsTextEdit()
-        receive_payreq_e.setFont(QFont(MONOSPACE_FONT))
-        receive_payreq_e.addCopyButton(self.app)
-        receive_payreq_e.setReadOnly(True)
-        receive_payreq_e.setFocusPolicy(Qt.ClickFocus)
-
-        receive_qr = QRCodeWidget(fixedSize=220)
-        receive_qr.mouseReleaseEvent = lambda x: self.toggle_qr_window()
-        receive_qr.enterEvent = lambda x: self.app.setOverrideCursor(QCursor(Qt.PointingHandCursor))
-        receive_qr.leaveEvent = lambda x: self.app.setOverrideCursor(QCursor(Qt.ArrowCursor))
-
-        receive_address_e = ButtonsTextEdit()
-        receive_address_e.setFont(QFont(MONOSPACE_FONT))
-        receive_address_e.addCopyButton(self.app)
-        receive_address_e.setReadOnly(True)
-        # Incase update_receive_address_styling triggers a warning, it will be shown only in the receive tab
-        receive_address_e.textChanged.connect(self.update_receive_address_styling)
-
+    def display_request_tab(self, payment_uri:str, address:str) -> None:
+        receive_address_e, receive_payreq_e, receive_qr = self.create_receive_widgets()
         receive_payreq_e.setText(payment_uri)
         receive_address_e.setText(address)
 
@@ -3549,23 +3533,12 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
         qr_icon = "qrcode_white.png" if ColorScheme.dark_scheme else "qrcode.png"
         receive_address_e.addButton(qr_icon, qr_show, _("Show as QR code"))
 
-
-        uri = str(receive_payreq_e.text())
+        uri = receive_payreq_e.text()
         receive_qr.setData(uri)
         if self.qr_window and self.qr_window.isVisible():
             self.qr_window.qrw.setData(uri)
 
-
-        receive_tabs = QTabWidget()
-        receive_tabs.addTab(receive_address_e, _('Address'))
-        receive_tabs.addTab(receive_payreq_e, _('Request'))
-        receive_tabs.addTab(receive_qr, _('QR Code'))
-        receive_tabs.setCurrentIndex(self.config.get('receive_tabs_index', 0))
-        receive_tabs.currentChanged.connect(lambda i: self.config.set_key('receive_tabs_index', i))
-        receive_tabs_sp = receive_tabs.sizePolicy()
-        receive_tabs_sp.setRetainSizeWhenHidden(True)
-        receive_tabs.setSizePolicy(receive_tabs_sp)
-
+        receive_tabs = self.create_receive_tabs_widget(receive_address_e, receive_payreq_e, receive_qr)
 
         dialog = QDialog(self)
         dialog.setWindowTitle("Name Request (Available in Receive)")
