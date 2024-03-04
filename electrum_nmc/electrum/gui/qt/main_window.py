@@ -29,7 +29,6 @@ import os
 import traceback
 import json
 import shutil
-from typing_extensions import Tuple
 import weakref
 import csv
 from decimal import Decimal
@@ -1180,7 +1179,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
 
         return w
 
-    def create_receive_widgets(self) -> Tuple[ButtonsTextEdit, ButtonsTextEdit, QRCodeWidget]:
+    def create_receive_widgets(self):
         receive_payreq_e = ButtonsTextEdit()
         receive_payreq_e.setFont(QFont(MONOSPACE_FONT))
         receive_payreq_e.addCopyButton(self.app)
