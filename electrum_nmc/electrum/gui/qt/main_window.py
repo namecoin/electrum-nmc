@@ -3450,7 +3450,6 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
         self.buy_names_new_name_hex_lineedit.textChanged.connect(self.update_buy_names_preview)
         self.buy_names_new_name_hex_lineedit.textEdited.connect(self.update_register_name_from_hex)
 
-
         self.buy_names_new_name_domain_lineedit = self.buy_names_ui.registerNameDomain
         self.buy_names_new_name_domain_lineedit.textEdited.connect(self.update_register_name_from_domain)
 
@@ -3545,6 +3544,11 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
         dialog_layout = QVBoxLayout()
         dialog.setLayout(dialog_layout)
         dialog_layout.addWidget(receive_tabs)
+
+        if is_address(address) and self.wallet.is_used(address):
+            receive_address_e.setStyleSheet(ColorScheme.RED.as_stylesheet(True))
+            receive_address_e.setToolTip(_("This address has already been used. "
+                                                        "For better privacy, do not reuse it for new payments."))
 
         dialog.show()
 
