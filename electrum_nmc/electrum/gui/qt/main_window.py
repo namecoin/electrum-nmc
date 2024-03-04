@@ -29,6 +29,7 @@ import os
 import traceback
 import json
 import shutil
+from typing_extensions import Tuple
 import weakref
 import csv
 from decimal import Decimal
@@ -1141,24 +1142,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
             buttons.addWidget(self.create_lightning_invoice_button)
         grid.addLayout(buttons, 4, 3, 1, 2)
 
-        self.receive_payreq_e = ButtonsTextEdit()
-        self.receive_payreq_e.setFont(QFont(MONOSPACE_FONT))
-        self.receive_payreq_e.addCopyButton(self.app)
-        self.receive_payreq_e.setReadOnly(True)
-        self.receive_payreq_e.textChanged.connect(self.update_receive_qr)
-        self.receive_payreq_e.setFocusPolicy(Qt.ClickFocus)
-
-        self.receive_qr = QRCodeWidget(fixedSize=220)
-        self.receive_qr.mouseReleaseEvent = lambda x: self.toggle_qr_window()
-        self.receive_qr.enterEvent = lambda x: self.app.setOverrideCursor(QCursor(Qt.PointingHandCursor))
-        self.receive_qr.leaveEvent = lambda x: self.app.setOverrideCursor(QCursor(Qt.ArrowCursor))
-
-        self.receive_address_e = ButtonsTextEdit()
-        self.receive_address_e.setFont(QFont(MONOSPACE_FONT))
-        self.receive_address_e.addCopyButton(self.app)
-        self.receive_address_e.setReadOnly(True)
-        self.receive_address_e.textChanged.connect(self.update_receive_address_styling)
-
+        self.receive_address_e, self.receive_payreq_e, self.receive_qr = self.create_receive_widgets()
         qr_show = lambda: self.show_qrcode(str(self.receive_address_e.text()), _('Receiving address'), parent=self)
         qr_icon = "qrcode_white.png" if ColorScheme.dark_scheme else "qrcode.png"
         self.receive_address_e.addButton(qr_icon, qr_show, _("Show as QR code"))
@@ -1168,15 +1152,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
         from .request_list import RequestList
         self.request_list = RequestList(self)
 
-        receive_tabs = QTabWidget()
-        receive_tabs.addTab(self.receive_address_e, _('Address'))
-        receive_tabs.addTab(self.receive_payreq_e, _('Request'))
-        receive_tabs.addTab(self.receive_qr, _('QR Code'))
-        receive_tabs.setCurrentIndex(self.config.get('receive_tabs_index', 0))
-        receive_tabs.currentChanged.connect(lambda i: self.config.set_key('receive_tabs_index', i))
-        receive_tabs_sp = receive_tabs.sizePolicy()
-        receive_tabs_sp.setRetainSizeWhenHidden(True)
-        receive_tabs.setSizePolicy(receive_tabs_sp)
+        receive_tabs = self.create_receive_tabs_widget(self.receive_address_e, self.receive_payreq_e, self.receive_qr)
 
         def maybe_hide_receive_tabs():
             receive_tabs.setVisible(bool(self.receive_payreq_e.text()))
@@ -1203,6 +1179,40 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
         vbox.setStretchFactor(self.request_list, 1000)
 
         return w
+
+    def create_receive_widgets(self) -> Tuple[ButtonsTextEdit, ButtonsTextEdit, QRCodeWidget]:
+        receive_payreq_e = ButtonsTextEdit()
+        receive_payreq_e.setFont(QFont(MONOSPACE_FONT))
+        receive_payreq_e.addCopyButton(self.app)
+        receive_payreq_e.setReadOnly(True)
+        receive_payreq_e.textChanged.connect(self.update_receive_qr)
+        receive_payreq_e.setFocusPolicy(Qt.ClickFocus)
+
+        receive_qr = QRCodeWidget(fixedSize=220)
+        receive_qr.mouseReleaseEvent = lambda x: self.toggle_qr_window()
+        receive_qr.enterEvent = lambda x: self.app.setOverrideCursor(QCursor(Qt.PointingHandCursor))
+        receive_qr.leaveEvent = lambda x: self.app.setOverrideCursor(QCursor(Qt.ArrowCursor))
+
+        receive_address_e = ButtonsTextEdit()
+        receive_address_e.setFont(QFont(MONOSPACE_FONT))
+        receive_address_e.addCopyButton(self.app)
+        receive_address_e.setReadOnly(True)
+        receive_address_e.textChanged.connect(self.update_receive_address_styling)
+
+        return receive_address_e, receive_payreq_e, receive_qr
+
+    def create_receive_tabs_widget(self, receive_address_e:ButtonsTextEdit, receive_payreq_e:ButtonsTextEdit, receive_qr:QRCodeWidget) -> QTabWidget:
+        receive_tabs = QTabWidget()
+        receive_tabs.addTab(receive_address_e, _('Address'))
+        receive_tabs.addTab(receive_payreq_e, _('Request'))
+        receive_tabs.addTab(receive_qr, _('QR Code'))
+        receive_tabs.setCurrentIndex(self.config.get('receive_tabs_index', 0))
+        receive_tabs.currentChanged.connect(lambda i: self.config.set_key('receive_tabs_index', i))
+        receive_tabs_sp = receive_tabs.sizePolicy()
+        receive_tabs_sp.setRetainSizeWhenHidden(True)
+        receive_tabs.setSizePolicy(receive_tabs_sp)
+
+        return receive_tabs
 
     def delete_requests(self, keys):
         for key in keys:
@@ -1280,7 +1290,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
                 if not self.question(_("Warning: The next address will not be recovered automatically if you restore your wallet from seed; you may need to add it manually.\n\nThis occurs because you have too many unused addresses in your wallet. To avoid this situation, use the existing addresses first.\n\nCreate anyway?")):
                     return
                 addr = self.wallet.create_new_address(False)
-        
+
         return addr
 
     def create_bitcoin_request(self, amount, message, expiration, commitment=None, addr=None) -> Optional[str]:
@@ -3436,7 +3446,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
 
         self.buy_names_new_name_ascii_lineedit = self.buy_names_ui.registerNameAscii
         self.buy_names_new_name_ascii_lineedit.textEdited.connect(self.update_register_name_from_ascii)
-        
+
         self.buy_names_new_name_hex_lineedit = self.buy_names_ui.registerNameHex
         self.buy_names_new_name_hex_lineedit.textChanged.connect(self.update_buy_names_preview)
         self.buy_names_new_name_hex_lineedit.textEdited.connect(self.update_register_name_from_hex)
@@ -3444,7 +3454,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
 
         self.buy_names_new_name_domain_lineedit = self.buy_names_ui.registerNameDomain
         self.buy_names_new_name_domain_lineedit.textEdited.connect(self.update_register_name_from_domain)
-        
+
         self.buy_names_preview_label = self.buy_names_ui.previewLabel
 
         self.buy_names_check_name_availability_button = self.buy_names_ui.checkNameButton
@@ -3454,10 +3464,10 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
 
         self.buy_names_register_button = self.buy_names_ui.registerNameButton
         self.buy_names_register_button.clicked.connect(self.register_new_name)
-        
+
         self.gift_names_button = self.buy_names_ui.btnGiftButton
         self.gift_names_button.clicked.connect(self.request_new_name)
-        
+
         self.ExtraAmount_Label = QLabel(_('Extra Amount:'))
         self.extra_amount_e = BTCAmountEdit(self.get_decimal_point)
 
@@ -3506,7 +3516,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
         assert key is not None
         self.request_list.update()
         self.request_list.select_key(key)
-        
+
         req = self.wallet.receive_requests.get(key)
         URI = self.wallet.get_request_URI(req)
 
@@ -3524,7 +3534,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
         receive_qr.mouseReleaseEvent = lambda x: self.toggle_qr_window()
         receive_qr.enterEvent = lambda x: self.app.setOverrideCursor(QCursor(Qt.PointingHandCursor))
         receive_qr.leaveEvent = lambda x: self.app.setOverrideCursor(QCursor(Qt.ArrowCursor))
-        
+
         receive_address_e = ButtonsTextEdit()
         receive_address_e.setFont(QFont(MONOSPACE_FONT))
         receive_address_e.addCopyButton(self.app)
@@ -3597,7 +3607,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
             except Exception as e:
                 # This pass statement allows valid hex that is invalid ASCII to be handled gracefully
                 pass
-                
+
         except Exception as e:
             self.buy_names_preview_label.setText(f"Error: {e}")
             self.buy_names_check_name_availability_button.setEnabled(False)
@@ -3615,7 +3625,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
                 self.buy_names_new_name_domain_lineedit.setText("")
         except Exception as e:
             self.buy_names_preview_label.setText(f"Error: {e}")
-            self.buy_names_check_name_availability_button.setEnabled(False)  
+            self.buy_names_check_name_availability_button.setEnabled(False)
 
     def update_register_name_from_domain(self):
         try:
