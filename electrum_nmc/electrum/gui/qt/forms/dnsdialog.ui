@@ -66,7 +66,7 @@
           </size>
          </property>
          <property name="text">
-          <string>Namecoin A records are for IPv4, IPv6, Tor, Freenet, I2P, and ZeroNet addresses only and specify where your domain should direct to.</string>
+          <string>Namecoin A records are for IPv4, IPv6, Tor, Freenet, I2P, IPFS, IPNS and ZeroNet addresses only and specify where your domain should direct to.</string>
          </property>
          <property name="wordWrap">
           <bool>true</bool>
@@ -115,6 +115,16 @@
              <item>
               <property name="text">
                <string>I2P</string>
+              </property>
+             </item>
+            <item>
+              <property name="text">
+               <string>IPFS</string>
+              </property>
+             </item>
+            <item>
+              <property name="text">
+               <string>IPNS</string>
               </property>
              </item>
              <item>

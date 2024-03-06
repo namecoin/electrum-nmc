@@ -17,6 +17,7 @@ bin/
 .mypy_cache
 .vscode
 electrum_data
+.DS_Store
 
 # icons
 electrum_nmc/electrum/gui/kivy/theming/light-0.png
@@ -39,12 +40,14 @@ contrib/android_debug.keystore
 contrib/android/android_debug.keystore
 contrib/secp256k1/
 contrib/zbar/
+contrib/osx/build-venv/
 
 # shared objects
 electrum_nmc/electrum/*.so
 electrum_nmc/electrum/*.so.0
 electrum_nmc/electrum/*.dll
 electrum_nmc/electrum/*.dylib
+contrib/osx/*.dylib
 
 # Namecoin-Qt forms
 electrum_nmc/electrum/gui/qt/forms/configurenamedialog.py

@@ -13,12 +13,15 @@ if TYPE_CHECKING:
 
 
 Builder.load_string('''
+#:import KIVY_GUI_PATH electrum.gui.kivy.KIVY_GUI_PATH
+
 <QRDialog@Popup>
     id: popup
     title: ''
     data: ''
     shaded: False
     help_text: ''
+    close_button_text: ''
     AnchorLayout:
         anchor_x: 'center'
         BoxLayout:
@@ -47,21 +50,29 @@ Builder.load_string('''
                     on_release:
                         root.copy_to_clipboard()
                 IconButton:
-                    icon: 'atlas://electrum/gui/kivy/theming/light/share'
+                    icon: f'atlas://{KIVY_GUI_PATH}/theming/light/share'
                     size_hint: 0.6, None
                     height: '48dp'
                     on_release: root.do_share()
                 Button:
                     size_hint: 1, None
                     height: '48dp'
-                    text: _('Close')
+                    text: root.close_button_text
                     on_release:
                         popup.dismiss()
+                        if root.on_close: root.on_close()
 ''')
 
 class QRDialog(Factory.Popup):
-    def __init__(self, title, data, show_text, *,
-                 failure_cb=None, text_for_clipboard=None, help_text=None):
+
+    def __init__(
+            self, title, data, show_text, *,
+            failure_cb=None,
+            text_for_clipboard=None,
+            help_text=None,
+            close_button_text=None,
+            on_close=None):
+
         Factory.Popup.__init__(self)
         self.app = App.get_running_app()  # type: ElectrumWindow
         self.title = title
@@ -69,6 +80,8 @@ class QRDialog(Factory.Popup):
         self.help_text = (data if show_text else help_text) or ''
         self.failure_cb = failure_cb
         self.text_for_clipboard = text_for_clipboard if text_for_clipboard else data
+        self.close_button_text = close_button_text or _('Close')
+        self.on_close = on_close
 
     def on_open(self):
         self.ids.qr.set_data(self.data, self.failure_cb)

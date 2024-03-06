@@ -118,7 +118,7 @@ Create translations (optional)::
     sudo apt-get install python-requests gettext
     ./contrib/pull_locale
 
-Finally, to start Electrum::
+Finally, to start Electrum-NMC::
 
     ./run_electrum_nmc
 

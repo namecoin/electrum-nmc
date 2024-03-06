@@ -10,8 +10,6 @@ for i, x in enumerate(sys.argv):
 else:
     raise Exception('no name')
 
-PYHOME = 'c:/python3'
-
 home = 'C:\\electrum-nmc\\'
 
 # see https://github.com/pyinstaller/pyinstaller/issues/2005
@@ -94,7 +92,7 @@ for x in a.binaries.copy():
             a.binaries.remove(x)
             print('----> Removed x =', x)
 
-qt_data2remove=(r'pyqt5\qt\translations\qtwebengine_locales', )
+qt_data2remove=(r'pyqt5\qt\translations\qtwebengine_locales',)
 print("Removing Qt datas:", *qt_data2remove)
 for x in a.datas.copy():
     for r in qt_data2remove:
@@ -128,7 +126,7 @@ exe_portable = EXE(
     pyz,
     a.scripts,
     a.binaries,
-    a.datas + [ ('is_portable', 'README.md', 'DATA' ) ],
+    a.datas + [('is_portable', 'README.md', 'DATA')],
     name=os.path.join('build\\pyi.win32\\electrum-nmc', cmdline_name + "-portable.exe"),
     debug=False,
     strip=None,

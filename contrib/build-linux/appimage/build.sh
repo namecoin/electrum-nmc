@@ -9,13 +9,14 @@ DISTDIR="$PROJECT_ROOT/dist"
 BUILDDIR="$CONTRIB_APPIMAGE/build/appimage"
 APPDIR="$BUILDDIR/electrum-nmc.AppDir"
 CACHEDIR="$CONTRIB_APPIMAGE/.cache/appimage"
+PIP_CACHE_DIR="$CACHEDIR/pip_cache"
 
 export GCC_STRIP_BINARIES="1"
 
 # pinned versions
 # note: compiling python 3.8.x requires at least glibc 2.27,
 #       which is first available on ubuntu 18.04
-PYTHON_VERSION=3.7.9
+PYTHON_VERSION=3.7.10
 PKG2APPIMAGE_COMMIT="eb8f3acdd9f11ab19b78f5cb15daa772367daf15"
 SQUASHFSKIT_COMMIT="ae0d656efa2d0df2fcac795b6823b44462f19386"
 
@@ -26,7 +27,7 @@ APPIMAGE="$DISTDIR/electrum-nmc-$VERSION-x86_64.AppImage"
 . "$CONTRIB"/build_tools_util.sh
 
 rm -rf "$BUILDDIR"
-mkdir -p "$APPDIR" "$CACHEDIR" "$DISTDIR"
+mkdir -p "$APPDIR" "$CACHEDIR" "$PIP_CACHE_DIR" "$DISTDIR"
 
 # potential leftover from setuptools that might make pip put garbage in binary
 rm -rf "$PROJECT_ROOT/build"
@@ -40,7 +41,7 @@ download_if_not_exist "$CACHEDIR/appimagetool" "https://github.com/AppImage/AppI
 verify_hash "$CACHEDIR/appimagetool" "d918b4df547b388ef253f3c9e7f6529ca81a885395c31f619d9aaf7030499a13"
 
 download_if_not_exist "$CACHEDIR/Python-$PYTHON_VERSION.tar.xz" "https://www.python.org/ftp/python/$PYTHON_VERSION/Python-$PYTHON_VERSION.tar.xz"
-verify_hash "$CACHEDIR/Python-$PYTHON_VERSION.tar.xz" "91923007b05005b5f9bd46f3b9172248aea5abc1543e8a636d59e629c3331b01"
+verify_hash "$CACHEDIR/Python-$PYTHON_VERSION.tar.xz" "f8d82e7572c86ec9d55c8627aae5040124fd2203af400c383c821b980306ee6b"
 
 
 
@@ -96,6 +97,8 @@ python='appdir_python'
 info "installing pip."
 "$python" -m ensurepip
 
+break_legacy_easy_install
+
 
 info "preparing electrum-locale."
 (
@@ -106,6 +109,8 @@ info "preparing electrum-locale."
     if ! which msgfmt > /dev/null 2>&1; then
         fail "Please install gettext"
     fi
+    # we want the binary to have only compiled (.mo) locale files; not source (.po) files
+    rm -rf "$PROJECT_ROOT/electrum/locale/"
     for i in ./locale/*; do
         dir="$PROJECT_ROOT/electrum_nmc/electrum/$i/LC_MESSAGES"
         mkdir -p $dir
@@ -129,14 +134,23 @@ popd
 
 
 info "Installing build dependencies."
-mkdir -p "$CACHEDIR/pip_cache"
-"$python" -m pip install --no-dependencies --no-warn-script-location --cache-dir "$CACHEDIR/pip_cache" -r "$CONTRIB/deterministic-build/requirements-build-appimage.txt"
+"$python" -m pip install --no-dependencies --no-binary :all: --no-warn-script-location \
+    --cache-dir "$PIP_CACHE_DIR" -r "$CONTRIB/deterministic-build/requirements-build-appimage.txt"
 
 info "installing electrum-nmc and its dependencies."
-"$python" -m pip install --no-dependencies --no-warn-script-location --cache-dir "$CACHEDIR/pip_cache" -r "$CONTRIB/deterministic-build/requirements.txt"
-"$python" -m pip install --no-dependencies --no-warn-script-location --cache-dir "$CACHEDIR/pip_cache" -r "$CONTRIB/deterministic-build/requirements-binaries.txt"
-"$python" -m pip install --no-dependencies --no-warn-script-location --cache-dir "$CACHEDIR/pip_cache" -r "$CONTRIB/deterministic-build/requirements-hw.txt"
-"$python" -m pip install --no-dependencies --no-warn-script-location --cache-dir "$CACHEDIR/pip_cache" "$PROJECT_ROOT"
+# note: we prefer compiling C extensions ourselves, instead of using binary wheels,
+#       hence "--no-binary :all:" flags. However, we specifically allow
+#       - PyQt5, as it's harder to build from source
+#       - cryptography, as building it would need openssl 1.1, not available on ubuntu 16.04
+"$python" -m pip install --no-dependencies --no-binary :all: --no-warn-script-location \
+    --cache-dir "$PIP_CACHE_DIR" -r "$CONTRIB/deterministic-build/requirements.txt"
+"$python" -m pip install --no-dependencies --no-binary :all: --only-binary PyQt5,PyQt5-Qt5,cryptography --no-warn-script-location \
+    --cache-dir "$PIP_CACHE_DIR" -r "$CONTRIB/deterministic-build/requirements-binaries.txt"
+"$python" -m pip install --no-dependencies --no-binary :all: --no-warn-script-location \
+    --cache-dir "$PIP_CACHE_DIR" -r "$CONTRIB/deterministic-build/requirements-hw.txt"
+
+"$python" -m pip install --no-dependencies --no-warn-script-location \
+    --cache-dir "$PIP_CACHE_DIR" "$PROJECT_ROOT"
 
 # was only needed during build time, not runtime
 "$python" -m pip uninstall -y Cython
@@ -177,6 +191,8 @@ info "Copying additional libraries"
     cp -f /usr/lib/x86_64-linux-gnu/libusb-1.0.so "$APPDIR/usr/lib/libusb-1.0.so" || fail "Could not copy libusb"
     # some distros lack libxkbcommon-x11
     cp -f /usr/lib/x86_64-linux-gnu/libxkbcommon-x11.so.0 "$APPDIR"/usr/lib/x86_64-linux-gnu || fail "Could not copy libxkbcommon-x11"
+    # some distros lack some libxcb libraries (see https://github.com/Electron-Cash/Electron-Cash/issues/2196)
+    cp -f /usr/lib/x86_64-linux-gnu/libxcb-* "$APPDIR"/usr/lib/x86_64-linux-gnu || fail "Could not copy libxcb"
 )
 
 info "stripping binaries from debug symbols."
@@ -209,15 +225,16 @@ rm -rf "$PYDIR"/config-3.7m-x86_64-linux-gnu
 rm -rf "$PYDIR"/site-packages/{opt,pip,setuptools,wheel}
 rm -rf "$PYDIR"/site-packages/Cryptodome/SelfTest
 rm -rf "$PYDIR"/site-packages/{psutil,qrcode,websocket}/tests
+# rm lots of unused parts of Qt/PyQt. (assuming PyQt 5.15.3+ layout)
 for component in connectivity declarative help location multimedia quickcontrols2 serialport webengine websockets xmlpatterns ; do
-  rm -rf "$PYDIR"/site-packages/PyQt5/Qt/translations/qt${component}_*
-  rm -rf "$PYDIR"/site-packages/PyQt5/Qt/resources/qt${component}_*
+  rm -rf "$PYDIR"/site-packages/PyQt5/Qt5/translations/qt${component}_*
+  rm -rf "$PYDIR"/site-packages/PyQt5/Qt5/resources/qt${component}_*
 done
-rm -rf "$PYDIR"/site-packages/PyQt5/Qt/{qml,libexec}
-rm -rf "$PYDIR"/site-packages/PyQt5/{pyrcc.so,pylupdate.so,uic}
-rm -rf "$PYDIR"/site-packages/PyQt5/Qt/plugins/{bearer,gamepads,geometryloaders,geoservices,playlistformats,position,renderplugins,sceneparsers,sensors,sqldrivers,texttospeech,webview}
+rm -rf "$PYDIR"/site-packages/PyQt5/Qt5/{qml,libexec}
+rm -rf "$PYDIR"/site-packages/PyQt5/{pyrcc*.so,pylupdate*.so,uic}
+rm -rf "$PYDIR"/site-packages/PyQt5/Qt5/plugins/{bearer,gamepads,geometryloaders,geoservices,playlistformats,position,renderplugins,sceneparsers,sensors,sqldrivers,texttospeech,webview}
 for component in Bluetooth Concurrent Designer Help Location NetworkAuth Nfc Positioning PositioningQuick Qml Quick Sensors SerialPort Sql Test Web Xml ; do
-    rm -rf "$PYDIR"/site-packages/PyQt5/Qt/lib/libQt5${component}*
+    rm -rf "$PYDIR"/site-packages/PyQt5/Qt5/lib/libQt5${component}*
     rm -rf "$PYDIR"/site-packages/PyQt5/Qt${component}*
 done
 rm -rf "$PYDIR"/site-packages/PyQt5/Qt.so

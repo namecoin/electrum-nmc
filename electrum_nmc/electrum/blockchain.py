@@ -56,6 +56,7 @@ def serialize_header(header_dict: dict) -> str:
         + int_to_hex(int(header_dict['nonce']), 4)
     return s
 
+
 def deserialize_pure_header(s: bytes, height: int) -> dict:
     if not s:
         raise InvalidHeader('Invalid header: {}'.format(s))
@@ -72,6 +73,7 @@ def deserialize_pure_header(s: bytes, height: int) -> dict:
     h['block_height'] = height
     return h
 
+
 def deserialize_full_header(s: bytes, height: int, expect_trailing_data=False, start_position=0):
     """Deserialises a full block header which may include AuxPoW.
 
@@ -81,7 +83,7 @@ def deserialize_full_header(s: bytes, height: int, expect_trailing_data=False, s
 
     original_start = start_position
 
-    pure_header_bytes = s[start_position : start_position + HEADER_SIZE]
+    pure_header_bytes = s[start_position:start_position + HEADER_SIZE]
     h = deserialize_pure_header(pure_header_bytes, height)
     start_position += HEADER_SIZE
 
@@ -321,7 +323,7 @@ class Blockchain(Logger):
         self._size = os.path.getsize(p)//HEADER_SIZE if os.path.exists(p) else 0
 
     @classmethod
-    def verify_header(cls, header: dict, prev_hash: str, target: int, expected_header_hash: str=None, skip_auxpow: bool=False) -> None:
+    def verify_header(cls, header: dict, prev_hash: str, target: int, expected_header_hash: str = None, skip_auxpow: bool = False) -> None:
         _hash = hash_header(header)
         if expected_header_hash and expected_header_hash != _hash:
             raise Exception("hash mismatches with expected: {} vs {}".format(expected_header_hash, _hash))
@@ -641,7 +643,7 @@ class Blockchain(Logger):
         work_in_last_partial_chunk = (height % 2016 + 1) * work_in_single_header
         return running_total + work_in_last_partial_chunk
 
-    def can_connect(self, header: dict, check_height: bool=True, skip_auxpow: bool=False) -> bool:
+    def can_connect(self, header: dict, check_height: bool = True, skip_auxpow: bool = False) -> bool:
         if header is None:
             return False
         height = header['block_height']

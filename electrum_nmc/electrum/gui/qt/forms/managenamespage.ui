@@ -10,6 +10,7 @@
     <height>364</height>
    </rect>
   </property>
+  <!--
   <layout class="QHBoxLayout" name="horizontalLayout">
    <item>
     <widget class="QFrame" name="frame2">
@@ -25,6 +26,7 @@
      <property name="frameShadow">
       <enum>QFrame::Sunken</enum>
      </property>
+     -->
      <layout class="QVBoxLayout" name="verticalLayout">
       <!--
       <item>
@@ -308,9 +310,11 @@ to the network and creates a pending name_firstupdate transaction.</string>
        </layout>
       </item>
      </layout>
+     <!--
     </widget>
    </item>
   </layout>
+  -->
  </widget>
  <customwidgets>
   <!--

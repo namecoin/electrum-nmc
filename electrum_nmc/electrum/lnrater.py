@@ -10,16 +10,23 @@ from collections import defaultdict
 from pprint import pformat
 from random import choices
 from statistics import mean, median, stdev
-from typing import TYPE_CHECKING, Dict, NamedTuple, Tuple, List
+from typing import TYPE_CHECKING, Dict, NamedTuple, Tuple, List, Optional
+import sys
 import time
+
+if sys.version_info[:2] >= (3, 7):
+    from asyncio import get_running_loop
+else:
+    from asyncio import _get_running_loop as get_running_loop  # noqa: F401
 
 from .logging import Logger
 from .util import profiler
 from .lnrouter import fee_for_edge_msat
+from .lnutil import LnFeatures, ln_compare_features, IncompatibleLightningFeatures
 
 if TYPE_CHECKING:
     from .network import Network
-    from .channel_db import Policy
+    from .channel_db import Policy, NodeInfo
     from .lnchannel import ShortChannelID
     from .lnworker import LNWallet
 
@@ -40,7 +47,7 @@ EXCLUDE_NODE_AGE = 2 * MONTH_IN_BLOCKS
 # exclude nodes which have young mean channel age
 EXCLUDE_MEAN_CHANNEL_AGE = EXCLUDE_NODE_AGE
 # exclude nodes which charge a high fee
-EXCLUCE_EFFECTIVE_FEE_RATE = 0.001500
+EXCLUDE_EFFECTIVE_FEE_RATE = 0.001500
 # exclude nodes whose last channel open was a long time ago
 EXCLUDE_BLOCKS_LAST_CHANNEL = 3 * MONTH_IN_BLOCKS
 
@@ -76,7 +83,6 @@ class LNRater(Logger):
         Logger.__init__(self)
         self.lnworker = lnworker
         self.network = network
-        self.channel_db = self.network.channel_db
 
         self._node_stats: Dict[bytes, NodeStats] = {}  # node_id -> NodeStats
         self._node_ratings: Dict[bytes, float] = {}  # node_id -> float
@@ -105,7 +111,7 @@ class LNRater(Logger):
         # gossip sync progress state could be None when not started, but channel
         # db already knows something about the graph, which is why we allow to
         # evaluate the graph early
-        if progress_percent is not None or self.channel_db.num_nodes > 500:
+        if progress_percent is not None or self.network.channel_db.num_nodes > 500:
             progress_percent = progress_percent or 0  # convert None to 0
             now = time.time()
             # graph should have changed significantly during the sync progress
@@ -117,9 +123,9 @@ class LNRater(Logger):
                 self._last_analyzed = now
 
     async def _analyze_graph(self):
-        await self.channel_db.data_loaded.wait()
+        await self.network.channel_db.data_loaded.wait()
         self._collect_policies_by_node()
-        loop = asyncio.get_running_loop()
+        loop = get_running_loop()
         # the analysis is run in an executor because it's costly
         await loop.run_in_executor(None, self._collect_purged_stats)
         self._rate_nodes()
@@ -127,7 +133,7 @@ class LNRater(Logger):
         self._last_analyzed = now
 
     def _collect_policies_by_node(self):
-        policies = self.channel_db.get_node_policies()
+        policies = self.network.channel_db.get_node_policies()
         for pv, p in policies.items():
             # append tuples of ShortChannelID and Policy
             self._policies_by_nodes[pv[0]].append((pv[1], p))
@@ -136,7 +142,7 @@ class LNRater(Logger):
     def _collect_purged_stats(self):
         """Traverses through the graph and sorts out nodes."""
         current_height = self.network.get_local_height()
-        node_infos = self.channel_db.get_node_infos()
+        node_infos = self.network.channel_db.get_node_infos()
 
         for n, channel_policies in self._policies_by_nodes.items():
             try:
@@ -176,7 +182,7 @@ class LNRater(Logger):
                     p[1].fee_base_msat,
                     p[1].fee_proportional_millionths) / FEE_AMOUNT_MSAT for p in channel_policies]
                 mean_fees_rate = mean(effective_fee_rates)
-                if mean_fees_rate > EXCLUCE_EFFECTIVE_FEE_RATE:
+                if mean_fees_rate > EXCLUDE_EFFECTIVE_FEE_RATE:
                     continue
 
                 self._node_stats[n] = NodeStats(
@@ -237,23 +243,39 @@ class LNRater(Logger):
         node_keys = list(self._node_stats.keys())
         node_ratings = list(self._node_ratings.values())
         channel_peers = self.lnworker.channel_peers()
+        node_info: Optional["NodeInfo"] = None
 
         while True:
             # randomly pick nodes weighted by node_rating
             pk = choices(node_keys, weights=node_ratings, k=1)[0]
+            # node should have compatible features
+            node_info = self.network.channel_db.get_node_infos().get(pk, None)
+            peer_features = LnFeatures(node_info.features)
+            try:
+                ln_compare_features(self.lnworker.features, peer_features)
+            except IncompatibleLightningFeatures as e:
+                self.logger.info("suggested node is incompatible")
+                continue
 
             # don't want to connect to nodes we are already connected to
-            if pk not in channel_peers:
-                break
+            if pk in channel_peers:
+                continue
+            # don't want to connect to nodes we already have a channel with on another device
+            if self.lnworker.has_conflicting_backup_with(pk):
+                continue
+            break
 
-        node_infos = self.channel_db.get_node_infos()
+        alias = node_info.alias if node_info else 'unknown node alias'
         self.logger.info(
-            f"node rating for {node_infos[pk].alias}:\n"
+            f"node rating for {alias}:\n"
             f"{pformat(self._node_stats[pk])} (score {self._node_ratings[pk]})")
 
         return pk, self._node_stats[pk]
 
-    def suggest_peer(self):
+    def suggest_peer(self) -> Optional[bytes]:
+        """Suggests a LN node to open a channel with.
+        Returns a node ID (pubkey).
+        """
         self.maybe_analyze_graph()
         if self._node_ratings:
             return self.suggest_node_channel_open()[0]

@@ -33,7 +33,7 @@ from PyQt5.QtWidgets import *
 from electrum.bitcoin import TYPE_ADDRESS
 from electrum.commands import NameAlreadyExistsError
 from electrum.i18n import _
-from electrum.names import format_name_identifier, format_name_identifier_split, identifier_to_namespace
+from electrum.names import format_name_identifier, format_name_identifier_split, identifier_to_namespace, name_to_str, Encoding
 from electrum.network import TxBroadcastError, BestEffortRequestFailed
 from electrum.util import NotEnoughFunds, NoDynamicFeeEstimates
 from electrum.wallet import InternalAddressCorruption
@@ -126,8 +126,7 @@ class ConfigureNameDialog(QDialog, MessageBoxMixin):
         name_autoregister = self.main_window.console.namespace.get('name_autoregister')
 
         try:
-            # TODO: support non-ASCII encodings
-            name_autoregister(identifier.decode('ascii'), value.decode('ascii'), destination=recipient_address, wallet=self.wallet)
+            name_autoregister(name_to_str(identifier, Encoding.HEX), name_to_str(value, Encoding.HEX), destination=recipient_address, wallet=self.wallet, name_encoding=Encoding.HEX, value_encoding=Encoding.HEX)
         except NameAlreadyExistsError as e:
             formatted_name = format_name_identifier(identifier)
             self.main_window.show_message(_("Error registering ") + formatted_name + ": " + str(e))

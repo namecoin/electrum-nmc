@@ -24,7 +24,7 @@
 # SOFTWARE.
 
 from enum import IntEnum
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 from PyQt5.QtGui import QStandardItemModel, QStandardItem
 from PyQt5.QtWidgets import QMenu, QAbstractItemView
@@ -34,8 +34,12 @@ from electrum.i18n import _
 from electrum.util import format_time
 from electrum.invoices import PR_TYPE_ONCHAIN, PR_TYPE_LN, LNInvoice, OnchainInvoice
 from electrum.plugin import run_hook
+from electrum.invoices import Invoice
 
 from .util import MyTreeView, pr_icons, read_QIcon, webopen, MySortModel
+
+if TYPE_CHECKING:
+    from .main_window import ElectrumWindow
 
 
 ROLE_REQUEST_TYPE = Qt.UserRole
@@ -59,7 +63,7 @@ class RequestList(MyTreeView):
     }
     filter_columns = [Columns.DATE, Columns.DESCRIPTION, Columns.AMOUNT]
 
-    def __init__(self, parent):
+    def __init__(self, parent: 'ElectrumWindow'):
         super().__init__(parent, self.create_menu,
                          stretch_column=self.Columns.DESCRIPTION,
                          editable_columns=[])
@@ -123,19 +127,28 @@ class RequestList(MyTreeView):
                 status_item.setText(status_str)
                 status_item.setIcon(read_QIcon(pr_icons.get(status)))
 
+    def update_item(self, key, invoice: Invoice):
+        model = self.std_model
+        for row in range(0, model.rowCount()):
+            item = model.item(row, 0)
+            if item.data(ROLE_KEY) == key:
+                break
+        else:
+            return
+        status_item = model.item(row, self.Columns.STATUS)
+        status = self.parent.wallet.get_request_status(key)
+        status_str = invoice.get_status_str(status)
+        status_item.setText(status_str)
+        status_item.setIcon(read_QIcon(pr_icons.get(status)))
+
     def update(self):
         # not calling maybe_defer_update() as it interferes with conditional-visibility
         self.parent.update_receive_address_styling()
         self.proxy.setDynamicSortFilter(False)  # temp. disable re-sorting after every change
         self.std_model.clear()
         self.update_headers(self.__class__.headers)
-        for req in self.wallet.get_sorted_requests():
-            if req.is_lightning():
-                assert isinstance(req, LNInvoice)
-                key = req.rhash
-            else:
-                assert isinstance(req, OnchainInvoice)
-                key = req.id
+        for req in self.wallet.get_unpaid_requests():
+            key = self.wallet.get_key_for_receive_request(req)
             status = self.parent.wallet.get_request_status(key)
             status_str = req.get_status_str(status)
             request_type = req.type
@@ -146,13 +159,9 @@ class RequestList(MyTreeView):
             amount_str = self.parent.format_amount(amount) if amount else ""
             labels = [date, message, amount_str, status_str]
             if req.is_lightning():
-                assert isinstance(req, LNInvoice)
-                key = req.rhash
                 icon = read_QIcon("lightning.png")
                 tooltip = 'lightning request'
             else:
-                assert isinstance(req, OnchainInvoice)
-                key = req.get_address()
                 icon = read_QIcon("bitcoin.png")
                 tooltip = 'onchain request'
             items = [QStandardItem(e) for e in labels]
@@ -180,7 +189,7 @@ class RequestList(MyTreeView):
     def create_menu(self, position):
         items = self.selected_in_column(0)
         if len(items)>1:
-            keys = [ item.data(ROLE_KEY)  for item in items]
+            keys = [item.data(ROLE_KEY)  for item in items]
             menu = QMenu(self)
             menu.addAction(_("Delete requests"), lambda: self.parent.delete_requests(keys))
             menu.exec_(self.viewport().mapToGlobal(position))
@@ -206,5 +215,5 @@ class RequestList(MyTreeView):
         #if 'view_url' in req:
         #    menu.addAction(_("View in web browser"), lambda: webopen(req['view_url']))
         menu.addAction(_("Delete"), lambda: self.parent.delete_requests([key]))
-        run_hook('receive_list_menu', menu, key)
+        run_hook('receive_list_menu', self.parent, menu, key)
         menu.exec_(self.viewport().mapToGlobal(position))

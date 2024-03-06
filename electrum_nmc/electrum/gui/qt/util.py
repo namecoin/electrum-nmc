@@ -13,24 +13,26 @@ from typing import (NamedTuple, Callable, Optional, TYPE_CHECKING, Union, List, 
                     Sequence, Iterable)
 
 from PyQt5.QtGui import (QFont, QColor, QCursor, QPixmap, QStandardItem,
-                         QPalette, QIcon, QFontMetrics, QShowEvent)
+                         QPalette, QIcon, QFontMetrics, QShowEvent, QPainter, QHelpEvent)
 from PyQt5.QtCore import (Qt, QPersistentModelIndex, QModelIndex, pyqtSignal,
                           QCoreApplication, QItemSelectionModel, QThread,
-                          QSortFilterProxyModel, QSize, QLocale, QAbstractItemModel)
+                          QSortFilterProxyModel, QSize, QLocale, QAbstractItemModel,
+                          QEvent)
 from PyQt5.QtWidgets import (QPushButton, QLabel, QMessageBox, QHBoxLayout,
                              QAbstractItemView, QVBoxLayout, QLineEdit,
                              QStyle, QDialog, QGroupBox, QButtonGroup, QRadioButton,
                              QFileDialog, QWidget, QToolButton, QTreeView, QPlainTextEdit,
                              QHeaderView, QApplication, QToolTip, QTreeWidget, QStyledItemDelegate,
-                             QMenu)
+                             QMenu, QStyleOptionViewItem)
 
 from electrum.i18n import _, languages
 from electrum.util import FileImportFailed, FileExportFailed, make_aiohttp_session, resource_path
-from electrum.invoices import PR_UNPAID, PR_PAID, PR_EXPIRED, PR_INFLIGHT, PR_UNKNOWN, PR_FAILED, PR_ROUTING
+from electrum.invoices import PR_UNPAID, PR_PAID, PR_EXPIRED, PR_INFLIGHT, PR_UNKNOWN, PR_FAILED, PR_ROUTING, PR_UNCONFIRMED
 
 if TYPE_CHECKING:
     from .main_window import ElectrumWindow
     from .installwizard import InstallWizard
+    from electrum.simple_config import SimpleConfig
 
 
 if platform.system() == 'Windows':
@@ -51,6 +53,7 @@ pr_icons = {
     PR_INFLIGHT:"unconfirmed.png",
     PR_FAILED:"warning.png",
     PR_ROUTING:"unconfirmed.png",
+    PR_UNCONFIRMED:"unconfirmed.png",
 }
 
 
@@ -70,7 +73,7 @@ class EnterButton(QPushButton):
         self.clicked.connect(func)
 
     def keyPressEvent(self, e):
-        if e.key() in [ Qt.Key_Return, Qt.Key_Enter ]:
+        if e.key() in [Qt.Key_Return, Qt.Key_Enter]:
             self.func()
 
 
@@ -126,9 +129,10 @@ class HelpLabel(QLabel):
         return QLabel.leaveEvent(self, event)
 
 
-class HelpButton(QPushButton):
+class HelpButton(QToolButton):
     def __init__(self, text):
-        QPushButton.__init__(self, '?')
+        QToolButton.__init__(self)
+        self.setText('?')
         self.help_text = text
         self.setFocusPolicy(Qt.NoFocus)
         self.setFixedWidth(round(2.2 * char_width_in_lineedit()))
@@ -330,9 +334,14 @@ class BlockingWaitingDialog(WindowModalDialog):
         self.message_label = QLabel(message)
         vbox = QVBoxLayout(self)
         vbox.addWidget(self.message_label)
+        # show popup
         self.show()
+        # refresh GUI; needed for popup to appear and for message_label to get drawn
         QCoreApplication.processEvents()
+        QCoreApplication.processEvents()
+        # block and run given task
         task()
+        # close popup
         self.accept()
 
 
@@ -350,7 +359,16 @@ def line_dialog(parent, title, label, ok_label, default=None):
     if dialog.exec_():
         return txt.text()
 
-def text_dialog(parent, title, header_layout, ok_label, default=None, allow_multi=False):
+def text_dialog(
+        *,
+        parent,
+        title,
+        header_layout,
+        ok_label,
+        default=None,
+        allow_multi=False,
+        config: 'SimpleConfig',
+):
     from .qrtextedit import ScanQRTextEdit
     dialog = WindowModalDialog(parent, title)
     dialog.setMinimumWidth(600)
@@ -360,7 +378,7 @@ def text_dialog(parent, title, header_layout, ok_label, default=None, allow_mult
         l.addWidget(QLabel(header_layout))
     else:
         l.addLayout(header_layout)
-    txt = ScanQRTextEdit(allow_multi=allow_multi)
+    txt = ScanQRTextEdit(allow_multi=allow_multi, config=config)
     if default:
         txt.setText(default)
     l.addWidget(txt)
@@ -441,14 +459,20 @@ def filename_field(parent, config, defaultname, select_msg):
     hbox = QHBoxLayout()
 
     directory = config.get('io_dir', os.path.expanduser('~'))
-    path = os.path.join( directory, defaultname )
+    path = os.path.join(directory, defaultname)
     filename_e = QLineEdit()
     filename_e.setText(path)
 
     def func():
         text = filename_e.text()
-        _filter = "*.csv" if text.endswith(".csv") else "*.json" if text.endswith(".json") else None
-        p, __ = QFileDialog.getSaveFileName(None, select_msg, text, _filter)
+        _filter = "*.csv" if defaultname.endswith(".csv") else "*.json" if defaultname.endswith(".json") else None
+        p = getSaveFileName(
+            parent=None,
+            title=select_msg,
+            filename=text,
+            filter=_filter,
+            config=config,
+        )
         if p:
             filename_e.setText(p)
 
@@ -495,9 +519,38 @@ class ElectrumItemDelegate(QStyledItemDelegate):
         self.tv.is_editor_open = True
         return super().createEditor(parent, option, idx)
 
+    def paint(self, painter: QPainter, option: QStyleOptionViewItem, idx: QModelIndex) -> None:
+        custom_data = idx.data(MyTreeView.ROLE_CUSTOM_PAINT)
+        if custom_data is None:
+            return super().paint(painter, option, idx)
+        else:
+            # let's call the default paint method first; to paint the background (e.g. selection)
+            super().paint(painter, option, idx)
+            # and now paint on top of that
+            custom_data.paint(painter, option.rect)
+
+    def helpEvent(self, evt: QHelpEvent, view: QAbstractItemView, option: QStyleOptionViewItem, idx: QModelIndex) -> bool:
+        custom_data = idx.data(MyTreeView.ROLE_CUSTOM_PAINT)
+        if custom_data is None:
+            return super().helpEvent(evt, view, option, idx)
+        else:
+            if evt.type() == QEvent.ToolTip:
+                if custom_data.show_tooltip(evt):
+                    return True
+        return super().helpEvent(evt, view, option, idx)
+
+    def sizeHint(self, option: QStyleOptionViewItem, idx: QModelIndex) -> QSize:
+        custom_data = idx.data(MyTreeView.ROLE_CUSTOM_PAINT)
+        if custom_data is None:
+            return super().sizeHint(option, idx)
+        else:
+            default_size = super().sizeHint(option, idx)
+            return custom_data.sizeHint(default_size)
+
 
 class MyTreeView(QTreeView):
     ROLE_CLIPBOARD_DATA = Qt.UserRole + 100
+    ROLE_CUSTOM_PAINT   = Qt.UserRole + 101
 
     filter_columns: Iterable[int]
 
@@ -586,7 +639,7 @@ class MyTreeView(QTreeView):
     def keyPressEvent(self, event):
         if self.itemDelegate().opened:
             return
-        if event.key() in [ Qt.Key_F2, Qt.Key_Return, Qt.Key_Enter ]:
+        if event.key() in [Qt.Key_F2, Qt.Key_Return, Qt.Key_Enter]:
             self.on_activated(self.selectionModel().currentIndex())
             return
         super().keyPressEvent(event)
@@ -690,6 +743,8 @@ class MyTreeView(QTreeView):
         cc = menu.addMenu(_("Copy"))
         for column in self.Columns:
             column_title = self.original_model().horizontalHeaderItem(column).text()
+            if not column_title:
+                continue
             item_col = self.item_from_index(idx.sibling(idx.row(), column))
             clipboard_data = item_col.data(self.ROLE_CLIPBOARD_DATA)
             if clipboard_data is None:
@@ -772,6 +827,14 @@ class ButtonsWidget(QWidget):
     def on_copy(self):
         self.app.clipboard().setText(self.text())
         QToolTip.showText(QCursor.pos(), _("Text copied to clipboard"), self)
+
+    def addPasteButton(self, app):
+        self.app = app
+        self.addButton("copy.png", self.on_paste, _("Paste from clipboard"))
+
+    def on_paste(self):
+        self.setText(self.app.clipboard().text())
+
 
 class ButtonsLineEdit(QLineEdit, ButtonsWidget):
     def __init__(self, text=None):
@@ -924,9 +987,14 @@ class AcceptFileDragDrop:
         raise NotImplementedError()
 
 
-def import_meta_gui(electrum_window, title, importer, on_success):
+def import_meta_gui(electrum_window: 'ElectrumWindow', title, importer, on_success):
     filter_ = "JSON (*.json);;All files (*)"
-    filename = electrum_window.getOpenFileName(_("Open {} file").format(title), filter_)
+    filename = getOpenFileName(
+        parent=electrum_window,
+        title=_("Open {} file").format(title),
+        filter=filter_,
+        config=electrum_window.config,
+    )
     if not filename:
         return
     try:
@@ -938,10 +1006,15 @@ def import_meta_gui(electrum_window, title, importer, on_success):
         on_success()
 
 
-def export_meta_gui(electrum_window, title, exporter):
+def export_meta_gui(electrum_window: 'ElectrumWindow', title, exporter):
     filter_ = "JSON (*.json);;All files (*)"
-    filename = electrum_window.getSaveFileName(_("Select file to save your {}").format(title),
-                                               'electrum_{}.json'.format(title), filter_)
+    filename = getSaveFileName(
+        parent=electrum_window,
+        title=_("Select file to save your {}").format(title),
+        filename='electrum_{}.json'.format(title),
+        filter=filter_,
+        config=electrum_window.config,
+    )
     if not filename:
         return
     try:
@@ -953,25 +1026,44 @@ def export_meta_gui(electrum_window, title, exporter):
                                      .format(title, str(filename)))
 
 
-def get_parent_main_window(
-        widget, *, allow_wizard: bool = False,
-) -> Union[None, 'ElectrumWindow', 'InstallWizard']:
-    """Returns a reference to the ElectrumWindow this widget belongs to."""
-    from .main_window import ElectrumWindow
-    from .transaction_dialog import TxDialog
-    from .configure_name_dialog import ConfigureNameDialog
-    from .installwizard import InstallWizard
-    for _ in range(100):
-        if widget is None:
-            return None
-        if isinstance(widget, ElectrumWindow):
-            return widget
-        if isinstance(widget, (TxDialog, ConfigureNameDialog)):
-            return widget.main_window
-        if isinstance(widget, InstallWizard) and allow_wizard:
-            return widget
-        widget = widget.parentWidget()
-    return None
+def getOpenFileName(*, parent, title, filter="", config: 'SimpleConfig') -> Optional[str]:
+    """Custom wrapper for getOpenFileName that remembers the path selected by the user."""
+    directory = config.get('io_dir', os.path.expanduser('~'))
+    fileName, __ = QFileDialog.getOpenFileName(parent, title, directory, filter)
+    if fileName and directory != os.path.dirname(fileName):
+        config.set_key('io_dir', os.path.dirname(fileName), True)
+    return fileName
+
+
+def getSaveFileName(
+        *,
+        parent,
+        title,
+        filename,
+        filter="",
+        default_extension: str = None,
+        default_filter: str = None,
+        config: 'SimpleConfig',
+) -> Optional[str]:
+    """Custom wrapper for getSaveFileName that remembers the path selected by the user."""
+    directory = config.get('io_dir', os.path.expanduser('~'))
+    path = os.path.join(directory, filename)
+
+    file_dialog = QFileDialog(parent, title, path, filter)
+    file_dialog.setAcceptMode(QFileDialog.AcceptSave)
+    if default_extension:
+        # note: on MacOS, the selected filter's first extension seems to have priority over this...
+        file_dialog.setDefaultSuffix(default_extension)
+    if default_filter:
+        assert default_filter in filter, f"default_filter={default_filter!r} does not appear in filter={filter!r}"
+        file_dialog.selectNameFilter(default_filter)
+    if file_dialog.exec() != QDialog.Accepted:
+        return None
+
+    selected_path = file_dialog.selectedFiles()[0]
+    if selected_path and directory != os.path.dirname(selected_path):
+        config.set_key('io_dir', os.path.dirname(selected_path), True)
+    return selected_path
 
 
 def icon_path(icon_basename):
@@ -982,6 +1074,26 @@ def icon_path(icon_basename):
 def read_QIcon(icon_basename):
     return QIcon(icon_path(icon_basename))
 
+class IconLabel(QWidget):
+    IconSize = QSize(16, 16)
+    HorizontalSpacing = 2
+    def __init__(self, *, text='', final_stretch=True):
+        super(QWidget, self).__init__()
+        layout = QHBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+        self.setLayout(layout)
+        self.icon = QLabel()
+        self.label = QLabel(text)
+        layout.addWidget(self.label)
+        layout.addSpacing(self.HorizontalSpacing)
+        layout.addWidget(self.icon)
+        if final_stretch:
+            layout.addStretch()
+    def setText(self, text):
+        self.label.setText(text)
+    def setIcon(self, icon):
+        self.icon.setPixmap(icon.pixmap(self.IconSize))
+        self.icon.repaint()  # macOS hack for #6269
 
 def get_default_language():
     name = QLocale.system().name()
@@ -1002,7 +1114,7 @@ def webopen(url: str):
         if os.fork() == 0:
             del os.environ['LD_LIBRARY_PATH']
             webbrowser.open(url)
-            sys.exit(0)
+            os._exit(0)
     else:
         webbrowser.open(url)
 

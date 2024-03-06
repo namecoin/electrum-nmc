@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # Parameterize
-PYTHON_VERSION=3.7.9
+PYTHON_VERSION=3.7.10
 BUILDDIR=/tmp/electrum-nmc-build
 PACKAGE=Electrum-NMC
 GIT_REPO=https://github.com/namecoin/electrum-nmc
@@ -19,7 +19,6 @@ ROOT_FOLDER="$CONTRIB/.."
 src_dir=$(dirname "$0")
 cd $src_dir/../..
 
-VERSION=`git describe --tags --dirty --always`
 
 which brew > /dev/null 2>&1 || fail "Please install brew from https://brew.sh/ to continue"
 which xcodebuild > /dev/null 2>&1 || fail "Please install Xcode and xcode command line tools to continue"
@@ -73,6 +72,8 @@ PYTHON_CONFIGURE_OPTS="--enable-framework" pyenv install -s $PYTHON_VERSION && \
 pyenv global $PYTHON_VERSION || \
 fail "Unable to use Python $PYTHON_VERSION"
 
+break_legacy_easy_install
+
 # create a fresh virtualenv
 # This helps to avoid older versions of pip-installed dependencies interfering with the build.
 VENV_DIR="$CONTRIB_OSX/build-venv"
@@ -104,10 +105,12 @@ info "generating locale"
         brew link --force gettext
     fi
     cd "$CONTRIB"/deterministic-build/electrum-locale
+    # we want the binary to have only compiled (.mo) locale files; not source (.po) files
+    rm -rf "$ROOT_FOLDER/electrum/locale/"
     for i in ./locale/*; do
-        dir="$ROOT_FOLDER"/electrum_nmc/electrum/$i/LC_MESSAGES
+        dir="$ROOT_FOLDER/electrum_nmc/electrum/$i/LC_MESSAGES"
         mkdir -p $dir
-        msgfmt --output-file=$dir/electrum.mo $i/electrum.po || true
+        msgfmt --output-file="$dir/electrum.mo" "$i/electrum.po" || true
     done
 ) || fail "failed generating locale"
 
@@ -155,6 +158,8 @@ for d in ~/Library/Python/ ~/.pyenv .; do
   find . -exec touch -t '200101220000' {} +
   popd
 done
+
+VERSION=`git describe --tags --dirty --always`
 
 info "Building binary"
 APP_SIGN="$CODESIGN_CERT" pyinstaller --noconfirm --ascii --clean --name $VERSION contrib/osx/osx.spec || fail "Could not build binary"

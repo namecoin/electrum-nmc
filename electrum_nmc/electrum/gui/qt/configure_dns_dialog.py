@@ -191,6 +191,8 @@ class ConfigureDNSDialog(QDialog, MessageBoxMixin):
             "Tor": "tor",
             "I2P": "i2p",
             "Freenet": "freenet",
+            "IPFS": "ipfs",
+            "IPNS": "ipns",
             "ZeroNet": "zeronet",
         }
 
@@ -202,6 +204,10 @@ class ConfigureDNSDialog(QDialog, MessageBoxMixin):
 
         if address_type == "zeronet" and self.has_zeronet_record(domain):
             self.show_error(domain + _(" already has a ZeroNet record."))
+            return
+        
+        if (address_type == "ipfs" or address_type == "ipns") and self.has_dnslink_record(domain):
+            self.show_error(domain + _(" already has a IPFS or IPNS record."))
             return
 
         address = self.ui.editAHostname.text()
@@ -378,6 +384,18 @@ class ConfigureDNSDialog(QDialog, MessageBoxMixin):
 
         return False
 
+    def has_dnslink_record(self, domain):
+        for index, record in enumerate(self.get_records()):
+            if index == self.editing_row:
+                continue
+
+            record_domain, record_type, data = record
+
+            if record_domain == domain and record_type == "address" and (data[0] == "ipfs" or data[0] == "ipns"):
+                return True
+
+        return False
+
     def has_cname_record(self, domain):
         for index, record in enumerate(self.get_records()):
             if index == self.editing_row:
@@ -407,6 +425,14 @@ class ConfigureDNSDialog(QDialog, MessageBoxMixin):
                 formatted_data = "I2P: " + data[1]
             elif data[0] == "freenet":
                 formatted_data = "Freenet: " + data[1]
+            elif data[0] == "ipfs":
+                if data[1].startswith("dnslink=/ipfs/"):    # Remove the prefix to prevent duplication of the prefix & to show only the actual hash
+                    data[1] = data[1][len("dnslink=/ipfs/"):]
+                formatted_data = "IPFS: " + data[1]
+            elif data[0] == "ipns":
+                if data[1].startswith("dnslink=/ipns/"):
+                    data[1] = data[1][len("dnslink=/ipns/"):]
+                formatted_data = "IPNS: " + data[1]
             elif data[0] == "zeronet":
                 formatted_data = "ZeroNet: " + data[1]
             else:
@@ -504,7 +530,8 @@ class ConfigureDNSDialog(QDialog, MessageBoxMixin):
                 "ip6": "IPv6",
                 "tor": "Tor",
                 "i2p": "I2P",
-                "freenet": "Freenet",
+                "ipfs": "IPFS",
+                "ipns": "IPNS",
                 "zeronet": "ZeroNet",
             }
             self.ui.comboHostType.setCurrentText(address_type_dict[address_type])

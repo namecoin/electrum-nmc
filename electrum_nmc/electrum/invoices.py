@@ -9,7 +9,7 @@ from .i18n import _
 from .util import age
 from .lnaddr import lndecode, LnAddr
 from . import constants
-from .bitcoin import COIN
+from .bitcoin import COIN, TOTAL_COIN_SUPPLY_LIMIT_IN_BTC
 from .transaction import PartialTxOutput
 
 if TYPE_CHECKING:
@@ -29,6 +29,7 @@ PR_PAID     = 3     # send and propagated
 PR_INFLIGHT = 4     # unconfirmed
 PR_FAILED   = 5
 PR_ROUTING  = 6
+PR_UNCONFIRMED = 7
 
 pr_color = {
     PR_UNPAID:   (.7, .7, .7, 1),
@@ -38,6 +39,7 @@ pr_color = {
     PR_INFLIGHT: (.9, .6, .3, 1),
     PR_FAILED:   (.9, .2, .2, 1),
     PR_ROUTING: (.9, .6, .3, 1),
+    PR_UNCONFIRMED: (.9, .6, .3, 1),
 }
 
 pr_tooltips = {
@@ -48,6 +50,7 @@ pr_tooltips = {
     PR_INFLIGHT:_('In progress'),
     PR_FAILED:_('Failed'),
     PR_ROUTING: _('Computing route...'),
+    PR_UNCONFIRMED: _('Unconfirmed'),
 }
 
 PR_DEFAULT_EXPIRATION_WHEN_CREATING = 24*60*60  # 1 day
@@ -118,16 +121,28 @@ class OnchainInvoice(Invoice):
     outputs = attr.ib(kw_only=True, converter=_decode_outputs)  # type: List[PartialTxOutput]
     bip70 = attr.ib(type=str, kw_only=True)  # type: Optional[str]
     requestor = attr.ib(type=str, kw_only=True)  # type: Optional[str]
+    height = attr.ib(type=int, kw_only=True, validator=attr.validators.instance_of(int))
 
     def get_address(self) -> str:
-        assert len(self.outputs) == 1
+        """returns the first address, to be displayed in GUI"""
         return self.outputs[0].address
 
     def get_amount_sat(self) -> Union[int, str]:
         return self.amount_sat or 0
 
+    @amount_sat.validator
+    def _validate_amount(self, attribute, value):
+        if isinstance(value, int):
+            if not (0 <= value <= TOTAL_COIN_SUPPLY_LIMIT_IN_BTC * COIN):
+                raise ValueError(f"amount is out-of-bounds: {value!r} sat")
+        elif isinstance(value, str):
+            if value != "!":
+                raise ValueError(f"unexpected amount: {value!r}")
+        else:
+            raise ValueError(f"unexpected amount: {value!r}")
+
     @classmethod
-    def from_bip70_payreq(cls, pr: 'PaymentRequest') -> 'OnchainInvoice':
+    def from_bip70_payreq(cls, pr: 'PaymentRequest', height:int) -> 'OnchainInvoice':
         return OnchainInvoice(
             type=PR_TYPE_ONCHAIN,
             amount_sat=pr.get_amount(),
@@ -138,6 +153,7 @@ class OnchainInvoice(Invoice):
             exp=pr.get_expiration_date() - pr.get_time(),
             bip70=pr.raw.hex(),
             requestor=pr.get_requestor(),
+            height=height,
         )
 
 @attr.s
@@ -148,8 +164,18 @@ class LNInvoice(Invoice):
     __lnaddr = None
 
     @invoice.validator
-    def check(self, attribute, value):
+    def _validate_invoice_str(self, attribute, value):
         lndecode(value)  # this checks the str can be decoded
+
+    @amount_msat.validator
+    def _validate_amount(self, attribute, value):
+        if value is None:
+            return
+        if isinstance(value, int):
+            if not (0 <= value <= TOTAL_COIN_SUPPLY_LIMIT_IN_BTC * COIN * 1000):
+                raise ValueError(f"amount is out-of-bounds: {value!r} msat")
+        else:
+            raise ValueError(f"unexpected amount: {value!r}")
 
     @property
     def _lnaddr(self) -> LnAddr:
@@ -197,7 +223,7 @@ class LNInvoice(Invoice):
         d = self.to_json()
         d.update({
             'pubkey': self._lnaddr.pubkey.serialize().hex(),
-            'amount_NMC': self._lnaddr.amount,
+            'amount_NMC': str(self._lnaddr.amount),
             'rhash': self._lnaddr.paymenthash.hex(),
             'description': self._lnaddr.get_description(),
             'exp': self._lnaddr.get_expiry(),

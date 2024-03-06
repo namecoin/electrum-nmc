@@ -15,6 +15,8 @@ if TYPE_CHECKING:
 
 
 Builder.load_string('''
+#:import KIVY_GUI_PATH electrum.gui.kivy.KIVY_GUI_PATH
+
 <InvoiceDialog@Popup>
     id: popup
     amount_str: ''
@@ -38,7 +40,9 @@ Builder.load_string('''
                 text: _('Invoice data')+ ':'
             RefLabel:
                 data: root.data
+                text: root.data[:40] + "..."
                 name: _('Data')
+                show_text_with_qr: False
             TopLabel:
                 text: _('Description') + ':'
             RefLabel:
@@ -66,12 +70,12 @@ Builder.load_string('''
                     text: _('Delete')
                     on_release: root.delete_dialog()
                 IconButton:
-                    icon: 'atlas://electrum/gui/kivy/theming/light/copy'
+                    icon: f'atlas://{KIVY_GUI_PATH}/theming/light/copy'
                     size_hint: 0.5, None
                     height: '48dp'
                     on_release: root.copy_to_clipboard()
                 IconButton:
-                    icon: 'atlas://electrum/gui/kivy/theming/light/share'
+                    icon: f'atlas://{KIVY_GUI_PATH}/theming/light/share'
                     size_hint: 0.5, None
                     height: '48dp'
                     on_release: root.do_share()
@@ -98,7 +102,7 @@ class InvoiceDialog(Factory.Popup):
         self.description = invoice.message
         self.is_lightning = invoice.is_lightning()
         self.update_status()
-        self.log = self.app.wallet.lnworker.logs[self.key] if self.is_lightning else []
+        self.log = self.app.wallet.lnworker.logs[self.key] if self.is_lightning and self.app.wallet.lnworker else []
 
     def update_status(self):
         invoice = self.app.wallet.get_invoice(self.key)
@@ -131,8 +135,8 @@ class InvoiceDialog(Factory.Popup):
         from .question import Question
         def cb(result):
             if result:
-                self.app.wallet.delete_invoice(self.key)
                 self.dismiss()
+                self.app.wallet.delete_invoice(self.key)
                 self.app.send_screen.update()
         d = Question(_('Delete invoice?'), cb)
         d.open()

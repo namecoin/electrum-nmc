@@ -45,7 +45,7 @@ CJK_INTERVALS = [
     (0x2B740, 0x2B81F, 'CJK Unified Ideographs Extension D'),
     (0xF900, 0xFAFF, 'CJK Compatibility Ideographs'),
     (0x2F800, 0x2FA1D, 'CJK Compatibility Ideographs Supplement'),
-    (0x3190, 0x319F , 'Kanbun'),
+    (0x3190, 0x319F, 'Kanbun'),
     (0x2E80, 0x2EFF, 'CJK Radicals Supplement'),
     (0x2F00, 0x2FDF, 'CJK Radicals'),
     (0x31C0, 0x31EF, 'CJK Strokes'),
@@ -187,19 +187,20 @@ class Mnemonic(Logger):
             i = i*n + k
         return i
 
-    def make_seed(self, seed_type=None, *, num_bits=132) -> str:
+    def make_seed(self, *, seed_type=None, num_bits=None) -> str:
         if seed_type is None:
             seed_type = 'segwit'
+        if num_bits is None:
+            num_bits = 132
         prefix = version.seed_prefix(seed_type)
         # increase num_bits in order to obtain a uniform distribution for the last word
         bpw = math.log(len(self.wordlist), 2)
-        # rounding
-        n = int(math.ceil(num_bits/bpw) * bpw)
-        self.logger.info(f"make_seed. prefix: '{prefix}', entropy: {n} bits")
+        num_bits = int(math.ceil(num_bits/bpw) * bpw)
+        self.logger.info(f"make_seed. prefix: '{prefix}', entropy: {num_bits} bits")
         entropy = 1
-        while entropy < pow(2, n - bpw):
+        while entropy < pow(2, num_bits - bpw):
             # try again if seed would not contain enough words
-            entropy = randrange(pow(2, n))
+            entropy = randrange(pow(2, num_bits))
         nonce = 0
         while True:
             nonce += 1
@@ -240,13 +241,17 @@ def is_old_seed(seed: str) -> bool:
 
 
 def seed_type(x: str) -> str:
+    num_words = len(x.split())
     if is_old_seed(x):
         return 'old'
-    elif is_new_seed(x):
+    elif is_new_seed(x, version.SEED_PREFIX):
         return 'standard'
     elif is_new_seed(x, version.SEED_PREFIX_SW):
         return 'segwit'
-    elif is_new_seed(x, version.SEED_PREFIX_2FA):
+    elif is_new_seed(x, version.SEED_PREFIX_2FA) and (num_words == 12 or num_words >= 20):
+        # Note: in Electrum 2.7, there was a breaking change in key derivation
+        #       for this seed type. Unfortunately the seed version/prefix was reused,
+        #       and now we can only distinguish them based on number of words. :(
         return '2fa'
     elif is_new_seed(x, version.SEED_PREFIX_2FA_SW):
         return '2fa_segwit'

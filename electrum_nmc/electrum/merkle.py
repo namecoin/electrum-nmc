@@ -28,8 +28,14 @@ from .crypto import sha256d
 from .bitcoin import hash_decode, hash_encode
 from .transaction import Transaction
 
-class MerkleVerificationFailure(Exception): pass
-class InnerNodeOfSpvProofIsValidTx(MerkleVerificationFailure): pass
+
+class MerkleVerificationFailure(Exception):
+    pass
+
+
+class InnerNodeOfSpvProofIsValidTx(MerkleVerificationFailure):
+    pass
+
 
 def hash_merkle_root(merkle_branch: Sequence[str], tx_hash: str, leaf_pos_in_tree: int):
     """Return calculated merkle root."""
@@ -50,8 +56,9 @@ def hash_merkle_root(merkle_branch: Sequence[str], tx_hash: str, leaf_pos_in_tre
         h = sha256d(inner_node)
         index >>= 1
     if index != 0:
-        raise MerkleVerificationFailure(f'leaf_pos_in_tree too large for branch')
+        raise MerkleVerificationFailure('leaf_pos_in_tree too large for branch')
     return hash_encode(h)
+
 
 def _raise_if_valid_tx(raw_tx: str):
     # If an inner node of the merkle proof is also a valid tx, chances are, this is an attack.
@@ -61,7 +68,7 @@ def _raise_if_valid_tx(raw_tx: str):
     tx = Transaction(raw_tx)
     try:
         tx.deserialize()
-    except:
+    except Exception:
         pass
     else:
         raise InnerNodeOfSpvProofIsValidTx()

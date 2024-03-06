@@ -34,11 +34,11 @@ import certifi
 
 from electrum import util, keystore, ecc, crypto
 from electrum import transaction
-from electrum.transaction import Transaction, PartialTransaction, tx_from_any
+from electrum.transaction import Transaction, PartialTransaction, tx_from_any, SerializationError
 from electrum.bip32 import BIP32Node
 from electrum.plugin import BasePlugin, hook
 from electrum.i18n import _
-from electrum.wallet import Multisig_Wallet
+from electrum.wallet import Multisig_Wallet, Abstract_Wallet
 from electrum.util import bh2u, bfh
 
 from electrum.gui.qt.transaction_dialog import show_transaction, TxDialog
@@ -71,7 +71,7 @@ class Listener(util.DaemonThread):
         self.received.remove(keyhash)
 
     def run(self):
-        while self.running:
+        while self.is_running():
             if not self.keyhashes:
                 time.sleep(2)
                 continue
@@ -114,10 +114,10 @@ class Plugin(BasePlugin):
             return
         self._init_qt_received = True
         for window in gui.windows:
-            self.on_new_window(window)
+            self.load_wallet(window.wallet, window)
 
     @hook
-    def on_new_window(self, window):
+    def load_wallet(self, wallet: 'Abstract_Wallet', window: 'ElectrumWindow'):
         self.update(window)
 
     @hook
@@ -248,5 +248,9 @@ class Plugin(BasePlugin):
             return
 
         self.listener.clear(keyhash)
-        tx = tx_from_any(message)
+        try:
+            tx = tx_from_any(message)
+        except SerializationError as e:
+            window.show_error(_("Electrum was unable to deserialize the transaction:") + "\n" + str(e))
+            return
         show_transaction(tx, parent=window, prompt_if_unsaved=True)
