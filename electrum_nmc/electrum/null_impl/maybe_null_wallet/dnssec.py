@@ -62,17 +62,26 @@ import dns.rdtypes.IN.AAAA
 import ecdsa
 from . import rsakey
 
+from .util import print_error
+
 
 def python_validate_rrsig(rrset, rrsig, keys, origin=None, now=None):
     from dns.dnssec import ValidationFailure, ECDSAP256SHA256, ECDSAP384SHA384
-    from dns.dnssec import _find_candidate_keys, _make_hash, _is_ecdsa, _is_rsa, _to_rdata, _make_algorithm_id
+    from dns.dnssec import (
+        _find_candidate_keys,
+        _make_hash,
+        _is_ecdsa,
+        _is_rsa,
+        _to_rdata,
+        _make_algorithm_id,
+    )
 
     if isinstance(origin, str):
         origin = dns.name.from_text(origin, dns.name.root)
 
     for candidate_key in _find_candidate_keys(keys, rrsig):
         if not candidate_key:
-            raise ValidationFailure('unknown key')
+            raise ValidationFailure("unknown key")
 
         # For convenience, allow the rrset to be specified as a (name, rdataset)
         # tuple as well as a proper rrset
@@ -86,18 +95,18 @@ def python_validate_rrsig(rrset, rrsig, keys, origin=None, now=None):
         if now is None:
             now = time.time()
         if rrsig.expiration < now:
-            raise ValidationFailure('expired')
+            raise ValidationFailure("expired")
         if rrsig.inception > now:
-            raise ValidationFailure('not yet valid')
+            raise ValidationFailure("not yet valid")
 
         hash = _make_hash(rrsig.algorithm)
 
         if _is_rsa(rrsig.algorithm):
             keyptr = candidate_key.key
-            (bytes,) = struct.unpack('!B', keyptr[0:1])
+            (bytes,) = struct.unpack("!B", keyptr[0:1])
             keyptr = keyptr[1:]
             if bytes == 0:
-                (bytes,) = struct.unpack('!H', keyptr[0:2])
+                (bytes,) = struct.unpack("!H", keyptr[0:2])
                 keyptr = keyptr[2:]
             rsa_e = keyptr[0:bytes]
             rsa_n = keyptr[bytes:]
@@ -115,36 +124,38 @@ def python_validate_rrsig(rrset, rrsig, keys, origin=None, now=None):
                 key_len = 48
             else:
                 # shouldn't happen
-                raise ValidationFailure('unknown ECDSA curve')
+                raise ValidationFailure("unknown ECDSA curve")
             keyptr = candidate_key.key
             x = ecdsa.util.string_to_number(keyptr[0:key_len])
-            y = ecdsa.util.string_to_number(keyptr[key_len:key_len * 2])
+            y = ecdsa.util.string_to_number(keyptr[key_len: key_len * 2])
             assert ecdsa.ecdsa.point_is_valid(curve.generator, x, y)
             point = ecdsa.ellipticcurve.Point(curve.curve, x, y, curve.order)
             verifying_key = ecdsa.keys.VerifyingKey.from_public_point(point, curve)
             r = rrsig.signature[:key_len]
             s = rrsig.signature[key_len:]
-            sig = ecdsa.ecdsa.Signature(ecdsa.util.string_to_number(r),
-                                        ecdsa.util.string_to_number(s))
+            sig = ecdsa.ecdsa.Signature(
+                ecdsa.util.string_to_number(r), ecdsa.util.string_to_number(s)
+            )
 
         else:
-            raise ValidationFailure('unknown algorithm %u' % rrsig.algorithm)
+            raise ValidationFailure("unknown algorithm %u" % rrsig.algorithm)
 
         hash.update(_to_rdata(rrsig, origin)[:18])
         hash.update(rrsig.signer.to_digestable(origin))
 
         if rrsig.labels < len(rrname) - 1:
             suffix = rrname.split(rrsig.labels + 1)[1]
-            rrname = dns.name.from_text('*', suffix)
+            rrname = dns.name.from_text("*", suffix)
         rrnamebuf = rrname.to_digestable(origin)
-        rrfixed = struct.pack('!HHI', rdataset.rdtype, rdataset.rdclass,
-                              rrsig.original_ttl)
+        rrfixed = struct.pack(
+            "!HHI", rdataset.rdtype, rdataset.rdclass, rrsig.original_ttl
+        )
         rrlist = sorted(rdataset)
         for rr in rrlist:
             hash.update(rrnamebuf)
             hash.update(rrfixed)
             rrdata = rr.to_digestable(origin)
-            rrlen = struct.pack('!H', len(rrdata))
+            rrlen = struct.pack("!H", len(rrdata))
             hash.update(rrlen)
             hash.update(rrdata)
 
@@ -161,9 +172,9 @@ def python_validate_rrsig(rrset, rrsig, keys, origin=None, now=None):
                 return
 
         else:
-            raise ValidationFailure('unknown algorithm %s' % rrsig.algorithm)
+            raise ValidationFailure("unknown algorithm %s" % rrsig.algorithm)
 
-    raise ValidationFailure('verify failure')
+    raise ValidationFailure("verify failure")
 
 
 # replace validate_rrsig
@@ -172,34 +183,42 @@ dns.dnssec.validate_rrsig = python_validate_rrsig
 dns.dnssec.validate = dns.dnssec._validate
 
 
-
-from .util import print_error
-
-
 # hard-coded trust anchors (root KSKs)
 trust_anchors = [
     # KSK-2017:
-    dns.rrset.from_text('.', 1    , 'IN', 'DNSKEY', '257 3 8 AwEAAaz/tAm8yTn4Mfeh5eyI96WSVexTBAvkMgJzkKTOiW1vkIbzxeF3+/4RgWOq7HrxRixHlFlExOLAJr5emLvN7SWXgnLh4+B5xQlNVz8Og8kvArMtNROxVQuCaSnIDdD5LKyWbRd2n9WGe2R8PzgCmr3EgVLrjyBxWezF0jLHwVN8efS3rCj/EWgvIWgb9tarpVUDK/b58Da+sqqls3eNbuv7pr+eoZG+SrDK6nWeL3c6H5Apxz7LjVc1uTIdsIXxuOLYA4/ilBmSVIzuDWfdRUfhHdY6+cn8HFRm+2hM8AnXGXws9555KrUB5qihylGa8subX2Nn6UwNR1AkUTV74bU='),
+    dns.rrset.from_text(
+        ".",
+        1,
+        "IN",
+        "DNSKEY",
+        "257 3 8 AwEAAaz/tAm8yTn4Mfeh5eyI96WSVexTBAvkMgJzkKTOiW1vkIbzxeF3+/4RgWOq7HrxRixHlFlExOLAJr5emLvN7SWXgnLh4+B5xQlNVz8Og8kvArMtNROxVQuCaSnIDdD5LKyWbRd2n9WGe2R8PzgCmr3EgVLrjyBxWezF0jLHwVN8efS3rCj/EWgvIWgb9tarpVUDK/b58Da+sqqls3eNbuv7pr+eoZG+SrDK6nWeL3c6H5Apxz7LjVc1uTIdsIXxuOLYA4/ilBmSVIzuDWfdRUfhHdY6+cn8HFRm+2hM8AnXGXws9555KrUB5qihylGa8subX2Nn6UwNR1AkUTV74bU=",
+    ),
     # KSK-2010:
-    dns.rrset.from_text('.', 15202, 'IN', 'DNSKEY', '257 3 8 AwEAAagAIKlVZrpC6Ia7gEzahOR+9W29euxhJhVVLOyQbSEW0O8gcCjF FVQUTf6v58fLjwBd0YI0EzrAcQqBGCzh/RStIoO8g0NfnfL2MTJRkxoX bfDaUeVPQuYEhg37NZWAJQ9VnMVDxP/VHL496M/QZxkjf5/Efucp2gaD X6RS6CXpoY68LsvPVjR0ZSwzz1apAzvN9dlzEheX7ICJBBtuA6G3LQpz W5hOA2hzCTMjJPJ8LbqF6dsV6DoBQzgul0sGIcGOYl7OyQdXfZ57relS Qageu+ipAdTTJ25AsRTAoub8ONGcLmqrAmRLKBP1dfwhYB4N7knNnulq QxA+Uk1ihz0='),
+    dns.rrset.from_text(
+        ".",
+        15202,
+        "IN",
+        "DNSKEY",
+        "257 3 8 AwEAAagAIKlVZrpC6Ia7gEzahOR+9W29euxhJhVVLOyQbSEW0O8gcCjF FVQUTf6v58fLjwBd0YI0EzrAcQqBGCzh/RStIoO8g0NfnfL2MTJRkxoX bfDaUeVPQuYEhg37NZWAJQ9VnMVDxP/VHL496M/QZxkjf5/Efucp2gaD X6RS6CXpoY68LsvPVjR0ZSwzz1apAzvN9dlzEheX7ICJBBtuA6G3LQpz W5hOA2hzCTMjJPJ8LbqF6dsV6DoBQzgul0sGIcGOYl7OyQdXfZ57relS Qageu+ipAdTTJ25AsRTAoub8ONGcLmqrAmRLKBP1dfwhYB4N7knNnulq QxA+Uk1ihz0=",
+    ),
 ]
 
 
 def check_query(ns, sub, _type, keys):
     q = dns.message.make_query(sub, _type, want_dnssec=True)
     response = dns.query.tcp(q, ns, timeout=5)
-    assert response.rcode() == 0, 'No answer'
+    assert response.rcode() == 0, "No answer"
     answer = response.answer
-    assert len(answer) != 0, ('No DNS record found', sub, _type)
-    assert len(answer) != 1, ('No DNSSEC record found', sub, _type)
+    assert len(answer) != 0, ("No DNS record found", sub, _type)
+    assert len(answer) != 1, ("No DNSSEC record found", sub, _type)
     if answer[0].rdtype == dns.rdatatype.RRSIG:
         rrsig, rrset = answer
     elif answer[1].rdtype == dns.rdatatype.RRSIG:
         rrset, rrsig = answer
     else:
-        raise Exception('No signature set in record')
+        raise Exception("No signature set in record")
     if keys is None:
-        keys = {dns.name.from_text(sub):rrset}
+        keys = {dns.name.from_text(sub): rrset}
     dns.dnssec.validate(rrset, rrsig, keys)
     return rrset
 
@@ -210,24 +229,28 @@ def get_and_validate(ns, url, _type):
     for dnskey_rr in trust_anchors:
         try:
             # Check if there is a valid signature for the root dnskey
-            root_rrset = check_query(ns, '', dns.rdatatype.DNSKEY, {dns.name.root: dnskey_rr})
+            root_rrset = check_query(
+                ns, "", dns.rdatatype.DNSKEY, {dns.name.root: dnskey_rr}
+            )
             break
         except dns.dnssec.ValidationFailure:
             # It's OK as long as one key validates
             continue
     if not root_rrset:
-        raise dns.dnssec.ValidationFailure('None of the trust anchors found in DNS')
+        raise dns.dnssec.ValidationFailure("None of the trust anchors found in DNS")
     keys = {dns.name.root: root_rrset}
     # top-down verification
-    parts = url.split('.')
+    parts = url.split(".")
     for i in range(len(parts), 0, -1):
-        sub = '.'.join(parts[i-1:])
+        sub = ".".join(parts[i - 1:])
         name = dns.name.from_text(sub)
         # If server is authoritative, don't fetch DNSKEY
         query = dns.message.make_query(sub, dns.rdatatype.NS)
         response = dns.query.udp(query, ns, 3)
         assert response.rcode() == dns.rcode.NOERROR, "query error"
-        rrset = response.authority[0] if len(response.authority) > 0 else response.answer[0]
+        rrset = (
+            response.authority[0] if len(response.authority) > 0 else response.answer[0]
+        )
         rr = rrset[0]
         if rr.rdtype == dns.rdatatype.SOA:
             continue
@@ -238,7 +261,7 @@ def get_and_validate(ns, url, _type):
         # verify that a signed DS validates DNSKEY
         for ds in ds_rrset:
             for dnskey in rrset:
-                htype = 'SHA256' if ds.digest_type == 2 else 'SHA1'
+                htype = "SHA256" if ds.digest_type == 2 else "SHA1"
                 good_ds = dns.dnssec.make_ds(name, dnskey, htype)
                 if ds == good_ds:
                     break
@@ -256,13 +279,13 @@ def get_and_validate(ns, url, _type):
 
 def query(url, rtype):
     # 8.8.8.8 is Google's public DNS server
-    nameservers = ['8.8.8.8']
+    nameservers = ["8.8.8.8"]
     ns = nameservers[0]
     try:
         out = get_and_validate(ns, url, rtype)
         validated = True
     except BaseException as e:
-        #traceback.print_exc(file=sys.stderr)
+        # traceback.print_exc(file=sys.stderr)
         print_error("DNSSEC error:", str(e))
         resolver = dns.resolver.get_default_resolver()
         out = resolver.query(url, rtype)

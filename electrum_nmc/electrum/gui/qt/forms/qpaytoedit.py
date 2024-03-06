@@ -6,6 +6,7 @@ import electrum.gui.qt.main_window
 
 from electrum.i18n import _
 
+
 class QPayToEdit(PayToEdit):
     def __init__(self, parent):
         while not isinstance(parent, electrum.gui.qt.main_window.ElectrumWindow):
@@ -26,9 +27,8 @@ class QPayToEdit(PayToEdit):
 
         errors = self.get_errors()
         if errors:
-            self.win.show_warning(_("Invalid Lines found:") + "\n\n" +
-                '\n'.join([_("Line #") + f"{err.idx+1}: {err.line_content[:40]}... ({repr(err.exc)})"
-                for err in errors]))
+            self.win.show_warning(_("Invalid Lines found:") + "\n\n" + '\n'.join([_("Line #") + f"{err.idx+1}: {err.line_content[:40]}... ({repr(err.exc)})" for err in errors]))
+
             return None
 
         if self.is_alias and self.validated is False:

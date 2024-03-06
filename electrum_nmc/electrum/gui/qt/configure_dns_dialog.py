@@ -26,13 +26,11 @@
 from copy import deepcopy
 from enum import IntEnum
 import json
-import sys
-import traceback
 from typing import Union, List, Dict
 
-from PyQt5.QtCore import *
-from PyQt5.QtGui import *
-from PyQt5.QtWidgets import *
+from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QStandardItemModel, QStandardItem
+from PyQt5.QtWidgets import QDialog, QAbstractItemView
 
 from electrum.i18n import _
 from electrum.names import add_domain_record, get_domain_records
@@ -43,12 +41,17 @@ from .util import MessageBoxMixin
 
 dialogs = []  # Otherwise python randomly garbage collects the dialogs...
 
+
 def show_configure_dns(value, parent):
     if value != b"":
         try:
             json.loads(value)
         except json.decoder.JSONDecodeError:
-            parent.show_error(_("Current value of name is not valid JSON; please fix this before using the DNS editor."))
+            parent.show_error(
+                _(
+                    "Current value of name is not valid JSON; please fix this before using the DNS editor."
+                )
+            )
             return
 
     d = ConfigureDNSDialog(value, parent)
@@ -56,6 +59,8 @@ def show_configure_dns(value, parent):
     dialogs.append(d)
     d.show()
 
+
+# 'QDialog' is imported from PyQt5.QtCore, F405 is ignored intentionally
 class ConfigureDNSDialog(QDialog, MessageBoxMixin):
     class Columns(IntEnum):
         DOMAIN = 0
@@ -63,9 +68,9 @@ class ConfigureDNSDialog(QDialog, MessageBoxMixin):
         DATA = 2
 
     headers = {
-        Columns.DOMAIN: _('Domain'),
-        Columns.TYPE: _('Type'),
-        Columns.DATA: _('Data'),
+        Columns.DOMAIN: _("Domain"),
+        Columns.TYPE: _("Type"),
+        Columns.DATA: _("Data"),
     }
 
     TEXT_ADD_SUBDOMAIN = "Add Subdomain…"
@@ -80,7 +85,7 @@ class ConfigureDNSDialog(QDialog, MessageBoxMixin):
 
         self.editing_row = None
 
-        identifier = self.name_dialog.identifier.decode('ascii')
+        identifier = self.name_dialog.identifier.decode("ascii")
         if self.name_dialog.namespace == "d":
             self.base_domain = identifier[len("d/"):] + ".bit"
         elif self.name_dialog.namespace == "dd":
@@ -89,7 +94,9 @@ class ConfigureDNSDialog(QDialog, MessageBoxMixin):
             raise Exception("Identifier '" + identifier + "' is not d/ or dd/")
 
         # Fill in base domain in instructions.
-        self.ui.labelTLSDesc.setText(self.ui.labelTLSDesc.text().replace("example.bit", self.base_domain))
+        self.ui.labelTLSDesc.setText(
+            self.ui.labelTLSDesc.text().replace("example.bit", self.base_domain)
+        )
 
         subdomains = set([self.base_domain])
 
@@ -172,7 +179,11 @@ class ConfigureDNSDialog(QDialog, MessageBoxMixin):
 
             ui.labelDomainName.setText(self.base_domain)
 
-            ui.btnAdd.accepted.connect(lambda: self.add_domain(ui.editSubDomain.text() + "." + self.base_domain))
+            ui.btnAdd.accepted.connect(
+                lambda: self.add_domain(
+                    ui.editSubDomain.text() + "." + self.base_domain
+                )
+            )
 
             dialogs.append(d)
             d.show()
@@ -361,7 +372,9 @@ class ConfigureDNSDialog(QDialog, MessageBoxMixin):
 
             record_domain, record_type, data = record
 
-            if record_domain == domain and record_type == "address" and data[0] == "freenet":
+            if (
+                record_domain == domain and record_type == "address" and data[0] == "freenet"
+            ):
                 return True
 
         return False
@@ -373,7 +386,9 @@ class ConfigureDNSDialog(QDialog, MessageBoxMixin):
 
             record_domain, record_type, data = record
 
-            if record_domain == domain and record_type == "address" and data[0] == "zeronet":
+            if (
+                record_domain == domain and record_type == "address" and data[0] == "zeronet"
+            ):
                 return True
 
         return False
@@ -440,7 +455,7 @@ class ConfigureDNSDialog(QDialog, MessageBoxMixin):
 
         labels = [formatted_domain, formatted_record_type, formatted_data]
         record_item = [QStandardItem(x) for x in labels]
-
+        # 'Qt' is imported from PyQt5.QtCore, F405 is ignored intentionally
         record_item[self.Columns.DOMAIN].setData(domain, Qt.UserRole)
         record_item[self.Columns.TYPE].setData(record_type, Qt.UserRole)
         record_item[self.Columns.DATA].setData(data, Qt.UserRole)
@@ -481,10 +496,14 @@ class ConfigureDNSDialog(QDialog, MessageBoxMixin):
         model = table.model()
 
         # Get the indexes for each cell in the row
-        row_indexes = [model.index(row, column) for column in range(model.columnCount())]
+        row_indexes = [
+            model.index(row, column) for column in range(model.columnCount())
+        ]
 
         # Extract the data from each cell in the row
-        single_record = list([model.data(index, Qt.UserRole) for index in row_indexes])
+        single_record = list(
+            [model.data(index, Qt.UserRole) for index in row_indexes]
+        )
 
         domain = single_record[0]
 
@@ -620,10 +639,14 @@ class ConfigureDNSDialog(QDialog, MessageBoxMixin):
         # Iterate through all rows in the table
         for row in range(model.rowCount()):
             # Get the indexes for each cell in the row
-            row_indexes = [model.index(row, column) for column in range(model.columnCount())]
+            row_indexes = [
+                model.index(row, column) for column in range(model.columnCount())
+            ]
 
             # Extract the data from each cell in the row
-            single_record = list([model.data(index, Qt.UserRole) for index in row_indexes])
+            single_record = list(
+                [model.data(index, Qt.UserRole) for index in row_indexes]
+            )
 
             records.append(single_record)
 
@@ -639,7 +662,9 @@ class ConfigureDNSDialog(QDialog, MessageBoxMixin):
             return b""
         else:
             # Use compact, deterministic encoding for JSON
-            return json.dumps(value, sort_keys=True, separators=(',', ':')).encode("ascii")
+            return json.dumps(value, sort_keys=True, separators=(",", ":")).encode(
+                "ascii"
+            )
 
     def update_headers(self, headers: Union[List[str], Dict[int, str]]):
         # headers is either a list of column names, or a dict: (col_idx->col_name)
@@ -660,4 +685,3 @@ class ConfigureDNSDialog(QDialog, MessageBoxMixin):
         label = self.ui.labelBytes
         label.setTextFormat(Qt.RichText)
         label.setText(usage_text)
-

@@ -27,9 +27,6 @@ import time
 import threading
 import base64
 from functools import partial
-import traceback
-import sys
-from typing import Set
 
 import smtplib
 import imaplib
@@ -39,23 +36,26 @@ from email.mime.base import MIMEBase
 from email.encoders import encode_base64
 
 from PyQt5.QtCore import QObject, pyqtSignal, QThread
-from PyQt5.QtWidgets import (QVBoxLayout, QLabel, QGridLayout, QLineEdit,
-                             QInputDialog)
+from PyQt5.QtWidgets import QVBoxLayout, QLabel, QGridLayout, QLineEdit, QInputDialog
 
-from electrum.gui.qt.util import (EnterButton, Buttons, CloseButton, OkButton,
-                                  WindowModalDialog)
+from electrum.gui.qt.util import (
+    EnterButton,
+    Buttons,
+    CloseButton,
+    OkButton,
+    WindowModalDialog,
+)
 from electrum.gui.qt.main_window import ElectrumWindow
 
 from electrum.plugin import BasePlugin, hook
 from electrum.paymentrequest import PaymentRequest
 from electrum.i18n import _
 from electrum.logging import Logger
-from electrum.wallet import Abstract_Wallet
 from electrum.invoices import OnchainInvoice
 
 
 class Processor(threading.Thread, Logger):
-    polling_interval = 5*60
+    polling_interval = 5 * 60
 
     def __init__(self, imap_server, username, password, callback):
         threading.Thread.__init__(self)
@@ -74,11 +74,11 @@ class Processor(threading.Thread, Logger):
     def poll(self):
         try:
             self.M.select()
-        except:
+        except Exception:
             return
-        typ, data = self.M.search(None, 'ALL')
-        for num in str(data[0], 'utf8').split():
-            typ, msg_data = self.M.fetch(num, '(RFC822)')
+        typ, data = self.M.search(None, "ALL")
+        for num in str(data[0], "utf8").split():
+            typ, msg_data = self.M.fetch(num, "(RFC822)")
             msg = email.message_from_bytes(msg_data[0][1])
             p = msg.get_payload()
             if not msg.is_multipart():
@@ -96,7 +96,7 @@ class Processor(threading.Thread, Logger):
                 self.M = imaplib.IMAP4_SSL(self.imap_server)
                 self.M.login(self.username, self.password)
             except BaseException as e:
-                self.logger.info(f'connecting failed: {repr(e)}')
+                self.logger.info(f"connecting failed: {repr(e)}")
                 self.connect_wait *= 2
             else:
                 self.reset_connect_wait()
@@ -105,20 +105,20 @@ class Processor(threading.Thread, Logger):
                 try:
                     self.poll()
                 except BaseException as e:
-                    self.logger.info(f'polling failed: {repr(e)}')
+                    self.logger.info(f"polling failed: {repr(e)}")
                     break
                 time.sleep(self.polling_interval)
             time.sleep(random.randint(0, self.connect_wait))
 
     def send(self, recipient, message, payment_request):
         msg = MIMEMultipart()
-        msg['Subject'] = message
-        msg['To'] = recipient
-        msg['From'] = self.username
-        part = MIMEBase('application', "namecoin-paymentrequest")
+        msg["Subject"] = message
+        msg["To"] = recipient
+        msg["From"] = self.username
+        part = MIMEBase("application", "namecoin-paymentrequest")
         part.set_payload(payment_request)
         encode_base64(part)
-        part.add_header('Content-Disposition', 'attachment; filename="payreq.nmc"')
+        part.add_header("Content-Disposition", 'attachment; filename="payreq.nmc"')
         msg.attach(part)
         try:
             s = smtplib.SMTP_SSL(self.imap_server, timeout=2)
@@ -136,7 +136,7 @@ class QEmailSignalObject(QObject):
 class Plugin(BasePlugin):
 
     def fullname(self):
-        return 'Email'
+        return "Email"
 
     def description(self):
         return _("Send and receive payment requests via email")
@@ -146,18 +146,20 @@ class Plugin(BasePlugin):
 
     def __init__(self, parent, config, name):
         BasePlugin.__init__(self, parent, config, name)
-        self.imap_server = self.config.get('email_server', '')
-        self.username = self.config.get('email_username', '')
-        self.password = self.config.get('email_password', '')
+        self.imap_server = self.config.get("email_server", "")
+        self.username = self.config.get("email_username", "")
+        self.password = self.config.get("email_password", "")
         if self.imap_server and self.username and self.password:
-            self.processor = Processor(self.imap_server, self.username, self.password, self.on_receive)
+            self.processor = Processor(
+                self.imap_server, self.username, self.password, self.on_receive
+            )
             self.processor.start()
         self.obj = QEmailSignalObject()
         self.obj.email_new_invoice_signal.connect(self.new_invoice)
         self.wallets = set()  # type: Set[Abstract_Wallet]
 
     def on_receive(self, pr_str):
-        self.logger.info('received payment request')
+        self.logger.info("received payment request")
         self.pr = PaymentRequest(pr_str)
         self.obj.email_new_invoice_signal.emit()
 
@@ -173,7 +175,7 @@ class Plugin(BasePlugin):
         invoice = OnchainInvoice.from_bip70_payreq(self.pr)
         for wallet in self.wallets:
             wallet.save_invoice(invoice)
-        #main_window.invoice_list.update()
+        # main_window.invoice_list.update()
 
     @hook
     def receive_list_menu(self, window: ElectrumWindow, menu, addr):
@@ -181,6 +183,7 @@ class Plugin(BasePlugin):
 
     def send(self, window: ElectrumWindow, addr):
         from electrum import paymentrequest
+
         req = window.wallet.receive_requests.get(addr)
         if not isinstance(req, OnchainInvoice):
             window.show_error("Only on-chain requests are supported.")
@@ -193,45 +196,47 @@ class Plugin(BasePlugin):
             payload = pr.SerializeToString()
         if not payload:
             return
-        recipient, ok = QInputDialog.getText(window, 'Send request', 'Email invoice to:')
+        recipient, ok = QInputDialog.getText(
+            window, "Send request", "Email invoice to:"
+        )
         if not ok:
             return
         recipient = str(recipient)
-        self.logger.info(f'sending mail to {recipient}')
+        self.logger.info(f"sending mail to {recipient}")
         try:
             # FIXME this runs in the GUI thread and blocks it...
             self.processor.send(recipient, message, payload)
         except BaseException as e:
-            self.logger.exception('')
+            self.logger.exception("")
             window.show_message(repr(e))
         else:
-            window.show_message(_('Request sent.'))
+            window.show_message(_("Request sent."))
 
     def requires_settings(self):
         return True
 
     def settings_widget(self, window):
-        return EnterButton(_('Settings'), partial(self.settings_dialog, window))
+        return EnterButton(_("Settings"), partial(self.settings_dialog, window))
 
     def settings_dialog(self, window):
         d = WindowModalDialog(window, _("Email settings"))
         d.setMinimumSize(500, 200)
 
         vbox = QVBoxLayout(d)
-        vbox.addWidget(QLabel(_('Server hosting your email account')))
+        vbox.addWidget(QLabel(_("Server hosting your email account")))
         grid = QGridLayout()
         vbox.addLayout(grid)
-        grid.addWidget(QLabel('Server (IMAP)'), 0, 0)
+        grid.addWidget(QLabel("Server (IMAP)"), 0, 0)
         server_e = QLineEdit()
         server_e.setText(self.imap_server)
         grid.addWidget(server_e, 0, 1)
 
-        grid.addWidget(QLabel('Username'), 1, 0)
+        grid.addWidget(QLabel("Username"), 1, 0)
         username_e = QLineEdit()
         username_e.setText(self.username)
         grid.addWidget(username_e, 1, 1)
 
-        grid.addWidget(QLabel('Password'), 2, 0)
+        grid.addWidget(QLabel("Password"), 2, 0)
         password_e = QLineEdit()
         password_e.setText(self.password)
         grid.addWidget(password_e, 2, 1)
@@ -243,22 +248,23 @@ class Plugin(BasePlugin):
             return
 
         server = str(server_e.text())
-        self.config.set_key('email_server', server)
+        self.config.set_key("email_server", server)
         self.imap_server = server
 
         username = str(username_e.text())
-        self.config.set_key('email_username', username)
+        self.config.set_key("email_username", username)
         self.username = username
 
         password = str(password_e.text())
-        self.config.set_key('email_password', password)
+        self.config.set_key("email_password", password)
         self.password = password
 
         check_connection = CheckConnectionThread(server, username, password)
-        check_connection.connection_error_signal.connect(lambda e: window.show_message(
-            _("Unable to connect to mail server:\n {}").format(e) + "\n" +
-            _("Please check your connection and credentials.")
-        ))
+        check_connection.connection_error_signal.connect(
+            lambda e: window.show_message(
+                _("Unable to connect to mail server:\n {}").format(e) + "\n" + _("Please check your connection and credentials.")
+            )
+        )
         check_connection.start()
 
 

@@ -85,7 +85,7 @@ def frombtc(inp: str) -> str:
             new_version = BitcoinMainnet.ADDRTYPE_P2PKH
         elif vch[0] == 5:  # P2SH address
             new_version = BitcoinMainnet.ADDRTYPE_P2SH
-        elif vch[0] in range (128, 136):  # Privkey with optional script type
+        elif vch[0] in range(128, 136):  # Privkey with optional script type
             offset = vch[0] - 128
             new_version = BitcoinMainnet.WIF_PREFIX + offset
         else:
@@ -121,6 +121,7 @@ def convert_ln_bech32(inp: str, new_base_hrp: str) -> str:
 
     new_hrp = "ln" + new_base_hrp + old_hrp[4:]
     return segwit_addr.bech32_encode(new_hrp, data)
+
 
 def frombtcbytes(inp: bytes) -> bytes:
     # Handle genesis block hashes, e.g. from Lightning messages
