@@ -1276,6 +1276,35 @@ class Commands:
         wallet.save_db()
         return wallet.export_request(req)
 
+    @command('w')
+    async def add_name_request(self, identifier, amount=0, memo='', expiration=3600, force=False, wallet: Abstract_Wallet = None):
+        """Create a name request, using the first unused address of the wallet. 
+        To include an extra amount, pass it in the amount field.
+        The address will be considered as used after this operation.
+        If no payment is received, the address will be considered as unused if the payment request is deleted from the wallet."""
+        addr = wallet.get_unused_address()
+        if addr is None:
+            if force:
+                addr = wallet.create_new_address(False)
+            else:
+                return False
+        identifier= name_from_str(identifier, Encoding.ASCII)
+        identifier_hex = name_to_str(identifier, Encoding.HEX)
+        identifier_formatted = format_name_identifier(identifier)
+        name_new_result = await self.name_new(identifier=identifier_hex, 
+                                              name_encoding=Encoding.HEX,
+                                              destination=addr,
+                                              unsigned=True, 
+                                              commitment_only=True)
+        commitment = name_new_result["commitment"]
+        amount = satoshis(amount) + (COIN // 100)
+        expiration = int(expiration) if expiration else None
+        memo = memo if memo else  f"Pre-registration: {identifier_formatted}"
+        req = wallet.make_payment_request(addr, amount, memo, expiration,commitment)
+        wallet.add_payment_request(req)
+        wallet.save_db()
+        return wallet.export_request(req)
+
     @command('wn')
     async def add_lightning_request(self, amount, memo='', expiration=3600, wallet: Abstract_Wallet = None):
         amount_sat = int(satoshis(amount))
