@@ -681,18 +681,6 @@ def get_domain_records_address(domain, value):
         if value["freenet"] is None:
             del value["freenet"]
 
-    if "ipfs" in value:
-        new_records, value["ipfs"] = get_domain_records_address_dnslink(domain, value["ipfs"])
-        records.extend(new_records)
-        if value["ipfs"] == []:
-            del value["ipfs"]
-    
-    if "ipns" in value:
-        new_records, value["ipns"] = get_domain_records_address_dnslink(domain, value["ipns"])
-        records.extend(new_records)
-        if value["ipns"] == []:
-            del value["ipns"]
-
     if "zeronet" in value:
         new_records, value["zeronet"] = get_domain_records_address_zeronet(domain, value["zeronet"])
         records.extend(new_records)
