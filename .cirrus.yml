@@ -353,7 +353,7 @@ task:
     - ./contrib/check_nmc_rebranding
 
 task:
-  name: "Static Analysis: $Tests"
+  name: "Static Analysis: $Test"
   container:
     image: python:3.7
     cpu: 1
@@ -364,21 +364,21 @@ task:
     - go install -v github.com/bradleyfalzon/revgrep/cmd/revgrep@master
   matrix:
     - env:
-        Tests: 'Flake8'
+        Test: 'Flake8'
       flake8_script:
         - apt-get install -y flake8
         - . ./contrib/lint_diff.sh
         - export PATH=${PATH}:`go env GOPATH`/bin
         - run_flake8
     - env:
-        Tests: 'Mypy'
+        Test: 'Mypy'
       mypy_script:
         - pip3 install mypy
         - . ./contrib/lint_diff.sh
         - export PATH=${PATH}:`go env GOPATH`/bin
         - run_mypy
     - env:
-        Tests: 'Pylint'
+        Test: 'Pylint'
       pylint_script:
         - pip3 install pylint
         - . ./contrib/lint_diff.sh
