@@ -773,7 +773,7 @@ class Commands:
         return result
 
     @command('wp')
-    async def name_new(self, identifier=None, name_encoding='ascii', commitment=None, destination=None, amount=0.0, outputs=[], fee=None, feerate=None, from_addr=None, from_coins=None, change_addr=None, pseudonymous_identifier=None, nocheck=False, unsigned=False, rbf=None, password=None, locktime=None, allow_existing=False, stream_id=None, wallet: Abstract_Wallet = None):
+    async def name_new(self, identifier=None, name_encoding='ascii', commitment=None, destination=None, amount=0.0, outputs=[], fee=None, feerate=None, from_addr=None, from_coins=None, change_addr=None, pseudonymous_identifier=None, nocheck=False, unsigned=False, rbf=None, password=None, locktime=None, allow_existing=False, stream_id=None, wallet: Abstract_Wallet = None, commitment_only=False):
         """Create a name pre-registration transaction. """
         self.nocheck = nocheck
 
@@ -832,6 +832,9 @@ class Commands:
         else:
             name_op, salt = {"op": OP_NAME_NEW, "commitment": commitment_bytes}, None
             salt_hex = None
+
+        if commitment_only:
+            return {"tx": None, "txid": None, "salt": None, "commitment": commitment}
 
         final_outputs = []
         for o_address, o_amount in outputs:
@@ -1090,6 +1093,33 @@ class Commands:
         # if the value is invalid, we'll be able to cancel the registration
         # without losing money in fees.
         validate_value_length(value)
+
+        # Check whether a name_new is already in the wallet for that name
+        try:
+            firstupdate_tx = await self.name_firstupdate(identifier,
+                                                       None,
+                                                       None,
+                                                       value=value,
+                                                       name_encoding=name_encoding,
+                                                       value_encoding=value_encoding,
+                                                       destination=destination,
+                                                       amount=amount,
+                                                       fee=fee,
+                                                       feerate=feerate,
+                                                       from_addr=None,
+                                                       change_addr=change_addr,
+                                                       pseudonymous_identifier=pseudonymous_identifier,
+                                                       nocheck=nocheck,
+                                                       rbf=rbf,
+                                                       password=password,
+                                                       locktime=locktime,
+                                                       allow_early=True,
+                                                       wallet=wallet)
+            # TODO: Implement queuetransaction later
+            await self.broadcast(firstupdate_tx, stream_id=stream_id)
+            return
+        except NamePreRegistrationNotFound:
+            pass
 
         # TODO: Don't hardcode the 0.005 name_firstupdate fee
         new_result = await self.name_new(identifier,
@@ -1869,8 +1899,9 @@ class Commands:
         return wallet.get_unused_address()
 
     @command('w')
-    async def add_request(self, amount, memo='', expiration=3600, force=False, wallet: Abstract_Wallet = None):
-        """Create a payment request, using the first unused address of the wallet.
+    async def add_request(self, amount, identifier=None, memo='', expiration=3600, force=False, wallet: Abstract_Wallet = None):
+        """Create a payment or name request, using the first unused address of the wallet.
+        To include an extra amount for name requests, use the amount field. Set the amount to zero if no extra amount is needed.
         The address will be considered as used after this operation.
         If no payment is received, the address will be considered as unused if the payment request is deleted from the wallet."""
         addr = wallet.get_unused_address()
@@ -1879,9 +1910,20 @@ class Commands:
                 addr = wallet.create_new_address(False)
             else:
                 return False
+        commitment = None
+        if identifier:
+            identifier= name_from_str(identifier, Encoding.ASCII)
+            identifier_hex = name_to_str(identifier, Encoding.HEX)
+            identifier_formatted = format_name_identifier(identifier)
+            name_new_result = await self.name_new(identifier=identifier_hex, 
+                                                name_encoding=Encoding.HEX,
+                                                destination=addr,
+                                                unsigned=True, 
+                                                commitment_only=True)
+            commitment = name_new_result["commitment"]
         amount = satoshis(amount)
         expiration = int(expiration) if expiration else None
-        req = wallet.make_payment_request(addr, amount, memo, expiration)
+        req = wallet.make_payment_request(addr, amount, memo, expiration, commitment)
         wallet.add_payment_request(req)
         wallet.save_db()
         return wallet.export_request(req)
@@ -2701,6 +2743,7 @@ command_options = {
     'trigger_txid':(None, "Broadcast the transaction when this txid reaches the specified number of confirmations"),
     'trigger_name':(None, "Broadcast the transaction when this name reaches the specified number of confirmations"),
     'options':     (None, "Options in Namecoin-Core-style dict"),
+    'commitment_only': (None, "Only return the pre-registration commitment (use if you're requesting a name)"),
 }
 
 

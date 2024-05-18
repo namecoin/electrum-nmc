@@ -55,7 +55,7 @@ from electrum.bitcoin import COIN, is_address
 from electrum.plugin import run_hook, BasePlugin
 from electrum.i18n import _
 from electrum.merkle import MerkleVerificationFailure
-from electrum.names import format_name_identifier, get_wallet_name_count, name_new_mature_in
+from electrum.names import format_name_identifier, get_wallet_name_count, name_new_mature_in, Encoding, name_from_str, name_to_str
 from electrum.util import (format_time,
                            UserCancelled, profiler,
                            bh2u, bfh, InvalidPassword,
@@ -1145,24 +1145,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
             buttons.addWidget(self.create_lightning_invoice_button)
         grid.addLayout(buttons, 4, 3, 1, 2)
 
-        self.receive_payreq_e = ButtonsTextEdit()
-        self.receive_payreq_e.setFont(QFont(MONOSPACE_FONT))
-        self.receive_payreq_e.addCopyButton(self.app)
-        self.receive_payreq_e.setReadOnly(True)
-        self.receive_payreq_e.textChanged.connect(self.update_receive_qr)
-        self.receive_payreq_e.setFocusPolicy(Qt.ClickFocus)
-
-        self.receive_qr = QRCodeWidget(fixedSize=220)
-        self.receive_qr.mouseReleaseEvent = lambda x: self.toggle_qr_window()
-        self.receive_qr.enterEvent = lambda x: self.app.setOverrideCursor(QCursor(Qt.PointingHandCursor))
-        self.receive_qr.leaveEvent = lambda x: self.app.setOverrideCursor(QCursor(Qt.ArrowCursor))
-
-        self.receive_address_e = ButtonsTextEdit()
-        self.receive_address_e.setFont(QFont(MONOSPACE_FONT))
-        self.receive_address_e.addCopyButton(self.app)
-        self.receive_address_e.setReadOnly(True)
-        self.receive_address_e.textChanged.connect(self.update_receive_address_styling)
-
+        self.receive_address_e, self.receive_payreq_e, self.receive_qr = self.create_receive_widgets()
         qr_show = lambda: self.show_qrcode(str(self.receive_address_e.text()), _('Receiving address'), parent=self)
         qr_icon = "qrcode_white.png" if ColorScheme.dark_scheme else "qrcode.png"
         self.receive_address_e.addButton(qr_icon, qr_show, _("Show as QR code"))
@@ -1172,15 +1155,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
         from .request_list import RequestList
         self.request_list = RequestList(self)
 
-        receive_tabs = QTabWidget()
-        receive_tabs.addTab(self.receive_address_e, _('Address'))
-        receive_tabs.addTab(self.receive_payreq_e, _('Request'))
-        receive_tabs.addTab(self.receive_qr, _('QR Code'))
-        receive_tabs.setCurrentIndex(self.config.get('receive_tabs_index', 0))
-        receive_tabs.currentChanged.connect(lambda i: self.config.set_key('receive_tabs_index', i))
-        receive_tabs_sp = receive_tabs.sizePolicy()
-        receive_tabs_sp.setRetainSizeWhenHidden(True)
-        receive_tabs.setSizePolicy(receive_tabs_sp)
+        receive_tabs = self.create_receive_tabs_widget(self.receive_address_e, self.receive_payreq_e, self.receive_qr)
 
         def maybe_hide_receive_tabs():
             receive_tabs.setVisible(bool(self.receive_payreq_e.text()))
@@ -1207,6 +1182,40 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
         vbox.setStretchFactor(self.request_list, 1000)
 
         return w
+
+    def create_receive_widgets(self):
+        receive_payreq_e = ButtonsTextEdit()
+        receive_payreq_e.setFont(QFont(MONOSPACE_FONT))
+        receive_payreq_e.addCopyButton(self.app)
+        receive_payreq_e.setReadOnly(True)
+        receive_payreq_e.textChanged.connect(self.update_receive_qr)
+        receive_payreq_e.setFocusPolicy(Qt.ClickFocus)
+
+        receive_qr = QRCodeWidget(fixedSize=220)
+        receive_qr.mouseReleaseEvent = lambda x: self.toggle_qr_window()
+        receive_qr.enterEvent = lambda x: self.app.setOverrideCursor(QCursor(Qt.PointingHandCursor))
+        receive_qr.leaveEvent = lambda x: self.app.setOverrideCursor(QCursor(Qt.ArrowCursor))
+
+        receive_address_e = ButtonsTextEdit()
+        receive_address_e.setFont(QFont(MONOSPACE_FONT))
+        receive_address_e.addCopyButton(self.app)
+        receive_address_e.setReadOnly(True)
+        receive_address_e.textChanged.connect(self.update_receive_address_styling)
+
+        return receive_address_e, receive_payreq_e, receive_qr
+
+    def create_receive_tabs_widget(self, receive_address_e:ButtonsTextEdit, receive_payreq_e:ButtonsTextEdit, receive_qr:QRCodeWidget) -> QTabWidget:
+        receive_tabs = QTabWidget()
+        receive_tabs.addTab(receive_address_e, _('Address'))
+        receive_tabs.addTab(receive_payreq_e, _('Request'))
+        receive_tabs.addTab(receive_qr, _('QR Code'))
+        receive_tabs.setCurrentIndex(self.config.get('receive_tabs_index', 0))
+        receive_tabs.currentChanged.connect(lambda i: self.config.set_key('receive_tabs_index', i))
+        receive_tabs_sp = receive_tabs.sizePolicy()
+        receive_tabs_sp.setRetainSizeWhenHidden(True)
+        receive_tabs.setSizePolicy(receive_tabs_sp)
+
+        return receive_tabs
 
     def delete_requests(self, keys):
         for key in keys:
@@ -1267,7 +1276,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
         title = _('Invoice') if is_lightning else _('Address')
         self.do_copy(content, title=title)
 
-    def create_bitcoin_request(self, amount, message, expiration) -> Optional[str]:
+    def address_creation(self):
         addr = self.wallet.get_unused_address()
         if addr is None:
             if not self.wallet.is_deterministic():  # imported wallet
@@ -1284,7 +1293,14 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
                 if not self.question(_("Warning: The next address will not be recovered automatically if you restore your wallet from seed; you may need to add it manually.\n\nThis occurs because you have too many unused addresses in your wallet. To avoid this situation, use the existing addresses first.\n\nCreate anyway?")):
                     return
                 addr = self.wallet.create_new_address(False)
-        req = self.wallet.make_payment_request(addr, amount, message, expiration)
+
+        return addr
+
+    def create_bitcoin_request(self, amount, message, expiration, commitment=None, addr=None) -> Optional[str]:
+        if not addr:
+            addr = self.address_creation()
+
+        req = self.wallet.make_payment_request(addr, amount, message, expiration, commitment)
         try:
             self.wallet.add_payment_request(req)
         except Exception as e:
@@ -1389,6 +1405,15 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
         amount_label = HelpLabel(_('Amount'), msg)
         grid.addWidget(amount_label, 3, 0)
         grid.addWidget(self.amount_e, 3, 1)
+
+        msg = _('Commitment for pre-registration when gifting names (not mandatory).')
+        self.commitment_label = HelpLabel(_('Commit'), msg)
+        grid.addWidget(self.commitment_label, 4, 0)
+        self.commitment_e = FreezableLineEdit()
+        self.commitment_e.setMinimumWidth(700)
+        grid.addWidget(self.commitment_e, 4, 1, 1, -1)
+        self.commitment_label.hide()
+        self.commitment_e.hide()
 
         self.fiat_send_e = AmountEdit(self.fx.get_currency if self.fx else '')
         if not self.fx or not self.fx.is_enabled():
@@ -1645,7 +1670,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
             self.pay_lightning_invoice(invoice.invoice, amount_msat=invoice.get_amount_msat())
         elif invoice.type == PR_TYPE_ONCHAIN:
             assert isinstance(invoice, OnchainInvoice)
-            self.pay_onchain_dialog(self.get_coins(), invoice.outputs)
+            self.pay_onchain_dialog(self.get_coins(), invoice.outputs,commitment=invoice.commitment)
         else:
             raise Exception('unknown invoice type')
 
@@ -1665,7 +1690,8 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
 
     def pay_onchain_dialog(self, inputs: Sequence[PartialTxInput],
                            outputs: List[PartialTxOutput], *,
-                           external_keypairs=None) -> None:
+                           external_keypairs=None,
+                           commitment=None,) -> None:
         # trustedcoin requires this
         if run_hook('abort_send', self):
             return
@@ -1680,6 +1706,20 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
             self.show_error(_("More than one output set to spend max"))
             return
 
+        if commitment:
+            try:
+                address = outputs[0].address
+                amount = electrum.commands.format_satoshis(outputs[0].value)
+                name_new = self.console.namespace.get('name_new')
+                name_new_result = name_new(commitment=commitment, destination=address, amount=amount)
+                tx = name_new_result["tx"]
+
+                broadcast = self.console.namespace.get('broadcast')
+                broadcast(tx)
+                return
+            except Exception as e:
+                self.show_message(f"{e}")
+                return
         output_value = '!' if '!' in output_values else sum(output_values)
         d = ConfirmTxDialog(window=self, make_tx=make_tx, output_value=output_value, is_sweep=is_sweep)
         if d.not_enough_funds:
@@ -1950,6 +1990,7 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
         amount = out.get('amount')
         label = out.get('label')
         message = out.get('message')
+        commitment = out.get('commitment')
         # use label as description (not BIP21 compliant)
         if label and not message:
             message = label
@@ -1960,7 +2001,16 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
         if amount:
             self.amount_e.setAmount(amount)
             self.amount_e.textEdited.emit("")
-
+        if commitment:
+            self.commitment_e.setText(commitment)
+            self.commitment_e.show()
+            self.commitment_label.show()
+            if not amount:
+                self.amount_e.setAmount(0)
+        else:
+            self.commitment_e.clear()
+            self.commitment_label.hide()
+            self.commitment_e.hide()
 
     def do_clear(self):
         self.max_button.setChecked(False)
@@ -1968,7 +2018,9 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
         self.payto_URI = None
         self.payto_e.is_pr = False
         self.set_onchain(False)
-        for e in [self.payto_e, self.message_e, self.amount_e]:
+        self.commitment_label.hide()
+        self.commitment_e.hide()
+        for e in [self.payto_e, self.message_e, self.amount_e, self.commitment_e]:
             e.setText('')
             e.setFrozen(False)
         self.update_status()
@@ -3367,23 +3419,115 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
 
         self.buy_names_register_button = self.buy_names_ui.registerNameButton
         self.buy_names_register_button.clicked.connect(self.register_new_name)
-        self.buy_names_register_button.hide()
 
         self.buy_names_buy_button = self.buy_names_ui.buyNameButton
         self.buy_names_buy_button.clicked.connect(self.buy_name)
-        self.buy_names_buy_button.hide()
+        
+        self.gift_names_button = self.buy_names_ui.btnGiftButton
+        self.gift_names_button.clicked.connect(self.request_new_name)
+
+        self.requestnameLabel = self.buy_names_ui.requestnameLabel
+        self.ExtraAmount_Label = QLabel(_('Extra Amount:'))
+        self.extra_amount_e = BTCAmountEdit(self.get_decimal_point)
+
+        self.gift_layout = self.buy_names_ui.horizontalLayout_giftName
+        self.gift_layout.insertWidget(1, self.ExtraAmount_Label)
+        self.gift_layout.insertWidget(2, self.extra_amount_e)
+
+        self.hide_register_ui()
 
         return w
+    
+    def hide_register_ui(self):
+        self.buy_names_register_button.hide()
+        self.gift_names_button.hide()
+        self.ExtraAmount_Label.hide()
+        self.extra_amount_e.hide()
+        self.extra_amount_e.clear()
+        self.buy_names_buy_button.hide()
+        self.requestnameLabel.clear()
+        self.requestnameLabel.hide()
+
+    def show_register_ui(self):
+        self.buy_names_register_button.show()
+        self.gift_names_button.show()
+        self.ExtraAmount_Label.show()
+        self.extra_amount_e.show()
+        self.requestnameLabel.show()
+
+    def request_new_name(self):
+        try:
+            identifier_ascii = self.buy_names_new_name_lineedit.text()
+            identifier = name_from_str(identifier_ascii, Encoding.ASCII)
+            identifier_hex = name_to_str(identifier, Encoding.HEX)
+            identifier_formatted = format_name_identifier(identifier)
+
+            name_new = self.console.namespace.get('name_new')
+            addr = self.address_creation()
+
+            name_new_result = name_new(identifier=identifier_hex, name_encoding=Encoding.HEX, destination=addr, unsigned=True, commitment_only=True)
+            commitment = name_new_result["commitment"]
+
+            amount = self.extra_amount_e.get_amount() or 0
+            message = f"Pre-registration"
+
+            # Expiry set to Never
+            key = self.create_bitcoin_request(amount, message, 0,addr=addr, commitment=commitment)
+            if not key:
+                return
+            self.address_list.update()
+            self.request_list.update()
+            self.request_list.select_key(key)
+
+            req = self.wallet.receive_requests.get(key)
+            URI = self.wallet.get_request_URI(req)
+
+            self.extra_amount_e.clear()
+            self.display_request_tab(URI, req.get_address())
+        except Exception as e:
+            raise ValueError(f"Failed to request new name: {e}")
+
+    def display_request_tab(self, payment_uri:str, address:str) -> None:
+        receive_address_e, receive_payreq_e, receive_qr = self.create_receive_widgets()
+        receive_payreq_e.setText(payment_uri)
+        receive_address_e.setText(address)
+
+        qr_show = lambda: self.show_qrcode(str(receive_address_e.text()), _('Receiving address'), parent=self)
+        qr_icon = "qrcode_white.png" if ColorScheme.dark_scheme else "qrcode.png"
+        receive_address_e.addButton(qr_icon, qr_show, _("Show as QR code"))
+
+        uri = receive_payreq_e.text()
+        receive_qr.setData(uri)
+        if self.qr_window and self.qr_window.isVisible():
+            self.qr_window.qrw.setData(uri)
+
+        receive_tabs = self.create_receive_tabs_widget(receive_address_e, receive_payreq_e, receive_qr)
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Name Request (Available in Receive)")
+
+        dialog_layout = QVBoxLayout()
+        dialog.setLayout(dialog_layout)
+        dialog_layout.addWidget(receive_tabs)
+
+        if is_address(address) and self.wallet.is_used(address):
+            receive_address_e.setStyleSheet(ColorScheme.RED.as_stylesheet(True))
+            receive_address_e.setToolTip(_("This address has already been used. "
+                                                        "For better privacy, do not reuse it for new payments."))
+
+        dialog.show()
 
     def update_buy_names_preview(self):
+        self.hide_register_ui()
         # TODO: handle non-ASCII encodings
         identifier = self.buy_names_new_name_lineedit.text().encode('ascii')
         identifier_formatted = format_name_identifier(identifier)
         self.buy_names_preview_label.setText(_("Name to register: ") + identifier_formatted)
 
         self.buy_names_status_label.setText("")
-        self.buy_names_register_button.hide()
-        self.buy_names_buy_button.hide()
+
+        # Set the request-name label
+        self.requestnameLabel.setText(_("You can request someone else to buy ") + identifier_formatted + _(" (they won't be able to frontrun you)"))
 
     def check_name_availability(self):
         # TODO: handle non-ASCII encodings
@@ -3473,44 +3617,44 @@ class ElectrumWindow(QMainWindow, MessageBoxMixin, Logger):
             return
         except MerkleVerificationFailure:
             # Merkle proof from ElectrumX was invalid
-            self.buy_names_register_button.hide()
+            self.hide_register_ui()
             self.buy_names_buy_button.hide()
             self.buy_names_status_label.setText(_("Merkle verification failure while checking name availability.  If this persists, try switching servers."))
             return
 
         if chain_syncing:
-            self.buy_names_register_button.hide()
+            self.hide_register_ui()
             self.buy_names_buy_button.hide()
             self.buy_names_status_label.setText(_("The blockchain is still syncing; please wait and then try again."))
         elif not name_valid:
-            self.buy_names_register_button.hide()
+            self.hide_register_ui()
             self.buy_names_buy_button.hide()
             self.buy_names_status_label.setText(_("That name is invalid (probably exceeded the 255-byte limit) and therefore cannot be registered."))
         elif name_mine:
-            self.buy_names_register_button.hide()
+            self.hide_register_ui()
             self.buy_names_buy_button.hide()
             self.buy_names_status_label.setText(_("You already own ") + identifier_formatted + _("!"))
         elif name_pending_mine:
-            self.buy_names_register_button.hide()
+            self.hide_register_ui()
             self.buy_names_buy_button.hide()
             self.buy_names_status_label.setText(_("You already have a registration pending for ") + identifier_formatted + _("!"))
         elif name_snipe_pending_mine:
-            self.buy_names_register_button.hide()
+            self.hide_register_ui()
             self.buy_names_buy_button.show()
             self.buy_names_status_label.setText(_("You already have a snipe pending for ") + identifier_formatted + _("!  Your snipe will be broadcast if/when the name expires.  You might be able to buy the name from the current owner."))
         elif name_exists and not name_pending_unverified:
-            self.buy_names_register_button.hide()
+            self.hide_register_ui()
             self.buy_names_buy_button.show()
             self.buy_names_status_label.setText(identifier_formatted + _(" is already registered.  You might be able to buy the name from the current owner."))
         elif name_pending_unverified:
-            self.buy_names_register_button.show()
+            self.show_register_ui()
             self.buy_names_buy_button.show()
             if name_mine_unverified:
                 self.buy_names_status_label.setText(_("The server reports that you already registered ") + identifier_formatted + _(" in approximately the past 2 hours, but Electrum-NMC couldn't verify this.  If you believe the server is wrong, you can try to register it or buy it from the current owner, but you may forfeit the name registration fee."))
             else:
                 self.buy_names_status_label.setText(_("The server reports that someone else already registered ") + identifier_formatted + _(" in approximately the past 2 hours, but Electrum-NMC couldn't verify this.  You might be able to buy the name from the current owner.  If you believe the server is wrong, you can try to register it, but you may forfeit the name registration fee."))
         else:
-            self.buy_names_register_button.show()
+            self.show_register_ui()
             self.buy_names_buy_button.hide()
             self.buy_names_status_label.setText(identifier_formatted + _(" is available to register!"))
 
