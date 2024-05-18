@@ -118,6 +118,7 @@ class OnchainInvoice(Invoice):
     outputs = attr.ib(kw_only=True, converter=_decode_outputs)  # type: List[PartialTxOutput]
     bip70 = attr.ib(type=str, kw_only=True)  # type: Optional[str]
     requestor = attr.ib(type=str, kw_only=True)  # type: Optional[str]
+    commitment = attr.ib(default=None, type=str, kw_only=True)
 
     def get_address(self) -> str:
         """returns the first address, to be displayed in GUI"""
