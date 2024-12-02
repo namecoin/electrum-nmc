@@ -4,55 +4,55 @@
         "s": "50002",
         "version": "1.4"
     },
-    "195.135.194.10": {
+    "198.50.223.25": {
         "pruning": "-",
         "s": "50002",
-        "version": "1.4"
+        "version": "1.4.3"
     },
-    "195.135.194.11": {
+    "198.50.223.26": {
         "pruning": "-",
         "s": "50002",
-        "version": "1.4"
+        "version": "1.4.3"
     },
-    "195.135.194.12": {
+    "198.50.223.27": {
         "pruning": "-",
         "s": "50002",
-        "version": "1.4"
+        "version": "1.4.3"
     },
-    "195.135.194.13": {
+    "198.50.223.28": {
         "pruning": "-",
         "s": "50002",
-        "version": "1.4"
+        "version": "1.4.3"
     },
-    "2001:678:7dc:10::2": {
+    "2607:5300:203:7ac5:198:50:223:25": {
         "pruning": "-",
         "s": "50002",
-        "version": "1.4"
+        "version": "1.4.3"
     },
-    "2001:678:7dc:11::2": {
+    "2607:5300:203:7ac5:198:50:223:26": {
         "pruning": "-",
         "s": "50002",
-        "version": "1.4"
+        "version": "1.4.3"
     },
-    "2001:678:7dc:12::2": {
+    "2607:5300:203:7ac5:198:50:223:27": {
         "pruning": "-",
         "s": "50002",
-        "version": "1.4"
+        "version": "1.4.3"
     },
-    "2001:678:7dc:13::2": {
+    "2607:5300:203:7ac5:198:50:223:28": {
         "pruning": "-",
         "s": "50002",
-        "version": "1.4"
+        "version": "1.4.3"
     },
     "46.229.238.187": {
         "pruning": "-",
         "s": "57002",
         "version": "1.4"
     },
-    "7mqrrbm6xgdle4bau3s3vo63eqilxetjshahtx5z44nhvcrepbfiwtyd.onion": {
+    "h6qrnwxtwiaahsw4qhk2nbutswwb54vnqso6jrxeuk6nwtfbos7jkoqd.onion": {
         "pruning": "-",
         "s": "50002",
-        "version": "1.4"
+        "version": "1.4.3"
     },
     "82.119.233.36": {
         "pruning": "-",
@@ -69,30 +69,30 @@
         "s": "50002",
         "version": "1.4"
     },
-    "electrumx1.nmc.bitclc.net": {
+    "electrumx1.nmc.dotbit.zone": {
         "pruning": "-",
         "s": "50002",
-        "version": "1.4"
+        "version": "1.4.3"
     },
-    "electrumx2.nmc.bitclc.net": {
+    "electrumx2.nmc.dotbit.zone": {
         "pruning": "-",
         "s": "50002",
-        "version": "1.4"
+        "version": "1.4.3"
     },
-    "electrumx3.nmc.bitclc.net": {
+    "electrumx3.nmc.dotbit.zone": {
         "pruning": "-",
         "s": "50002",
-        "version": "1.4"
+        "version": "1.4.3"
     },
-    "electrumx4.nmc.bitclc.net": {
+    "electrumx4.nmc.dotbit.zone": {
         "pruning": "-",
         "s": "50002",
-        "version": "1.4"
+        "version": "1.4.3"
     },
-    "mhgghnh4rpgu5ohjzo2atoz4fmcvxglddpz4q265hamkaifhnndjhoyd.onion": {
+    "mqhok2edqcxdpklwovquuvvl2q5or4g2o777qwrinydgzfxjbixq76yd.onion": {
         "pruning": "-",
         "s": "50002",
-        "version": "1.4"
+        "version": "1.4.3"
     },
     "nmc.bitcoins.sk": {
         "pruning": "-",
@@ -104,10 +104,10 @@
         "s": "57002",
         "version": "1.4"
     },
-    "t3ts346cpsdbqjkcvyveqfgldtipoco5yzxqs6sted6y4fgsgasnp3ad.onion": {
+    "wirg2tsto7rme7n26lkd3ivbvxmjyy2pktlozwjuep22jcsfsghfqbqd.onion": {
         "pruning": "-",
         "s": "50002",
-        "version": "1.4"
+        "version": "1.4.3"
     },
     "ulrichard.ch": {
         "pruning": "-",
@@ -115,9 +115,9 @@
         "t": "50005",
         "version": "1.4"
     },
-    "yo4ip6gfnddyt6pyjkgoovnscai2xu6nzkoaa7hzbun6crm2o65aljid.onion": {
+    "quuzpffsddq3aim3gk4oiczzyt5okjjzf4zpe6okzo6qidao6rshynqd.onion": {
         "pruning": "-",
         "s": "50002",
-        "version": "1.4"
+        "version": "1.4.3"
     }
 }
