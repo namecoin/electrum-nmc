@@ -336,7 +336,7 @@
   <customwidget>
    <class>QPayToEdit</class>
    <extends>QPlainTextEdit</extends>
-   <header>qpaytoedit.h</header>
+   <header>electrum_nmc.electrum.gui.qt.forms.qpaytoedit</header>
   </customwidget>
  </customwidgets>
  <resources/>
