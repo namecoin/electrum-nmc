@@ -388,7 +388,7 @@
   <customwidget>
    <class>QValidatedLineEdit</class>
    <extends>QLineEdit</extends>
-   <header>qvalidatedlineedit.h</header>
+   <header>electrum_nmc.electrum.gui.qt.forms.qvalidatedlineedit</header>
   </customwidget>
  </customwidgets>
  <resources/>
