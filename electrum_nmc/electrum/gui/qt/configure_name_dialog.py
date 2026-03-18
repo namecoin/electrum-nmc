@@ -108,6 +108,7 @@ class ConfigureNameDialog(QDialog, MessageBoxMixin):
         self.LabelValidJSON = self.ui.labelValidJSON
         self.LabelValidJSON.setWordWrap(True)
         self.configure_name_ascii_lineedit.textChanged.connect(self.validate_json_data)
+        self.ui.tabWidget.currentChanged.connect(self.on_tab_changed)
 
     def set_value(self, value):
         value_hex = name_to_str(value, Encoding.HEX)
@@ -266,7 +267,18 @@ class ConfigureNameDialog(QDialog, MessageBoxMixin):
                 self.LabelValidJSON.clear()
                 return
 
-            records, self.extra_records = get_domain_records(self.ui.labelName.text(),json_string)
+            # Check if JSON is valid
+            list_of_records = json.loads(json_string)
+
+            # Check if JSON is compact
+            compact_json = json.dumps(list_of_records, sort_keys=True)
+            
+            json_status = []
+            byte_diff = len(json_string.encode('utf-8')) - len(compact_json.encode('utf-8'))
+            if json_string != compact_json:
+                json_status.append(f"JSON not compact ({byte_diff} bytes can be saved)")
+            
+            records, self.extra_records = get_domain_records(self.ui.labelName.text(), json_string)
             for record in records:
                 _, record_type, data = record
                 if record_type == "address":
@@ -309,15 +321,21 @@ class ConfigureNameDialog(QDialog, MessageBoxMixin):
                     validate_IMPORT(data[0])
                 else:
                     raise ValueError("Unknown record type")
-            # Check if JSON is compact
-            list_of_records = json.loads(json_string)
-            compact_json = json.dumps(list_of_records)
-
-            if len(json_string) > len(compact_json):
-                raise ValueError("JSON is not compact")
-
-            self.LabelValidJSON.clear()
+            
+            # Update status message
+            if json_status:
+                self.LabelValidJSON.setText("; ".join(json_status))
+            else:
+                self.LabelValidJSON.setText("✓ Valid JSON; compact (no savings possible)")
+                
         except json.JSONDecodeError:
             self.LabelValidJSON.setText("Invalid JSON")
         except Exception as e:
-            self.LabelValidJSON.setText(f"{e}")
+            self.LabelValidJSON.setText(f"Invalid: {e}")
+
+    def on_tab_changed(self, index):
+        # Trigger validation when switching to ASCII tab
+        if index == 0:  # ASCII tab is selected
+            self.validate_json_data()
+        # Note: update_value_from_hex() already calls setText on dataEdit
+        # which triggers the textChanged signal and thus validate_json_data()
