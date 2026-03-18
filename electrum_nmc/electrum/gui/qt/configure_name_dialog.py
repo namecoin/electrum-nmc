@@ -109,11 +109,23 @@ class ConfigureNameDialog(QDialog, MessageBoxMixin):
         self.LabelValidJSON.setWordWrap(True)
         self.configure_name_ascii_lineedit.textChanged.connect(self.validate_json_data)
 
+        self.VALUE_MAX_BYTES = 520
+        self.configure_name_hex_lineedit.textChanged.connect(self.update_value_size)
+        self.update_value_size()
+
     def set_value(self, value):
         value_hex = name_to_str(value, Encoding.HEX)
         self.ui.dataEditHex.setText(value_hex)
         self.update_value_from_hex()
 
+    def update_value_size(self):
+        try:
+            value_hex = self.ui.dataEditHex.text()
+            value_bytes = name_from_str(value_hex, Encoding.HEX)
+            size = len(value_bytes)
+        except Exception:
+            size = len(self.ui.dataEditHex.text()) // 2
+        self.ui.labelValueSize.setText(f"{size} / {self.VALUE_MAX_BYTES} bytes")
 
     def get_transfer_address(self, transfer_to):
         if transfer_to.toPlainText() == "":
