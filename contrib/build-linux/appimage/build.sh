@@ -219,6 +219,17 @@ remove_emptydirs()
 remove_emptydirs
 
 
+info "minifying Python source files to decrease binary size."
+if "$python" -c "import python_minifier" 2>/dev/null; then
+    PYDIR_MINIFY="$APPDIR/usr/lib/python3.7/site-packages/electrum_nmc"
+    if [ -d "$PYDIR_MINIFY" ]; then
+        "$CONTRIB"/minify_python "$PYDIR_MINIFY"
+    fi
+else
+    info "python-minifier not installed, skipping minification."
+fi
+
+
 info "removing some unneeded stuff to decrease binary size."
 rm -rf "$APPDIR"/usr/{share,include}
 PYDIR="$APPDIR"/usr/lib/python3.7
