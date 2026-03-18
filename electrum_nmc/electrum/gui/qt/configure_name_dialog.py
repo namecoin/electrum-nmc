@@ -24,9 +24,12 @@
 # SOFTWARE.
 
 import cbor2
+from datetime import datetime, date
+from decimal import Decimal
 import json
 import sys
 import traceback
+import uuid
 
 from PyQt5.QtCore import *
 from PyQt5.QtGui import *
@@ -49,6 +52,46 @@ from .configure_dns_dialog import show_configure_dns
 from .util import MessageBoxMixin
 
 dialogs = []  # Otherwise python randomly garbage collects the dialogs...
+
+
+def cbor_to_diagnostic(obj) -> str:
+    """Convert a decoded CBOR object to CBOR Diagnostic Notation (RFC 8949 Appendix G)."""
+    if obj is None:
+        return "null"
+    if isinstance(obj, bool):
+        return "true" if obj else "false"
+    if isinstance(obj, int):
+        return str(obj)
+    if isinstance(obj, float):
+        return repr(obj)
+    if isinstance(obj, bytes):
+        return "h'" + obj.hex() + "'"
+    if isinstance(obj, str):
+        return '"' + obj.replace('\\', '\\\\').replace('"', '\\"') + '"'
+    if isinstance(obj, list):
+        items = ", ".join(cbor_to_diagnostic(item) for item in obj)
+        return "[" + items + "]"
+    if isinstance(obj, dict):
+        pairs = ", ".join(
+            cbor_to_diagnostic(k) + ": " + cbor_to_diagnostic(v)
+            for k, v in obj.items()
+        )
+        return "{" + pairs + "}"
+    if isinstance(obj, cbor2.CBORTag):
+        return str(obj.tag) + "(" + cbor_to_diagnostic(obj.value) + ")"
+    if isinstance(obj, cbor2.CBORSimpleValue):
+        return "simple(" + str(obj.value) + ")"
+    # cbor2 auto-decodes some tags into Python types
+    if isinstance(obj, datetime):
+        return '1("' + obj.isoformat() + '")'
+    if isinstance(obj, date):
+        return '1004("' + obj.isoformat() + '")'
+    if isinstance(obj, Decimal):
+        return str(obj)
+    if isinstance(obj, uuid.UUID):
+        return "37(h'" + obj.hex + "')"
+    # Fallback
+    return repr(obj)
 
 
 def show_configure_name(identifier, value, parent, is_new):
@@ -108,6 +151,9 @@ class ConfigureNameDialog(QDialog, MessageBoxMixin):
         self.LabelValidJSON = self.ui.labelValidJSON
         self.LabelValidJSON.setWordWrap(True)
         self.configure_name_ascii_lineedit.textChanged.connect(self.validate_json_data)
+
+        # Connect hex changes to CBOR validation
+        self.configure_name_hex_lineedit.textChanged.connect(self.validate_cbor_data)
 
     def set_value(self, value):
         value_hex = name_to_str(value, Encoding.HEX)
@@ -235,8 +281,8 @@ class ConfigureNameDialog(QDialog, MessageBoxMixin):
                 value_ascii = name_to_str(value, Encoding.ASCII)
                 self.ui.dataEdit.setText(value_ascii)
             except Exception as e:
-                # Make sure we are in the hex_tab
-                # DNS Editor uses ASCII, hence we diable the button
+                # Value contains non-ASCII bytes; switch to hex tab.
+                # DNS Editor uses ASCII, hence we disable the button.
                 self.ui.tabWidget.setCurrentIndex(1)
                 self.ui.btnDNSEditor.setDisabled(True)
 
@@ -249,6 +295,36 @@ class ConfigureNameDialog(QDialog, MessageBoxMixin):
         # to the wallet, because we're only issuing a single transaction, so
         # there's not much risk of accidental double-spends from subsequent
         # transactions.
+
+    def validate_cbor_data(self):
+        """Validate the hex value as CBOR and show diagnostic notation if valid."""
+        try:
+            value_hex = self.ui.dataEditHex.text()
+            if not value_hex:
+                self.ui.cborDiagnosticEdit.clear()
+                self.ui.labelCborDiagTitle.setVisible(False)
+                self.ui.cborDiagnosticEdit.setVisible(False)
+                return
+
+            value = name_from_str(value_hex, Encoding.HEX)
+
+            try:
+                cbor_data = cbor2.loads(value)
+                diagnostic = cbor_to_diagnostic(cbor_data)
+                self.ui.cborDiagnosticEdit.setText(diagnostic)
+                self.ui.labelCborDiagTitle.setVisible(True)
+                self.ui.cborDiagnosticEdit.setVisible(True)
+            except Exception:
+                # Not valid CBOR — hide the diagnostic display
+                self.ui.cborDiagnosticEdit.clear()
+                self.ui.labelCborDiagTitle.setVisible(False)
+                self.ui.cborDiagnosticEdit.setVisible(False)
+
+        except Exception:
+            # Invalid hex
+            self.ui.cborDiagnosticEdit.clear()
+            self.ui.labelCborDiagTitle.setVisible(False)
+            self.ui.cborDiagnosticEdit.setVisible(False)
 
     def validate_json_data(self):
         address_type_dict = {
