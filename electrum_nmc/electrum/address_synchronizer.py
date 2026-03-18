@@ -736,7 +736,13 @@ class AddressSynchronizer(Logger):
             for txout in tx.outputs():
                 v_out += txout.value
                 if self.is_mine(txout.address):
-                    v_out_mine += txout.value
+                    # Use value_display for the wallet delta so that the
+                    # 0.01 NMC locked in name outputs is not counted as
+                    # received funds.  This makes the "New transaction"
+                    # notification show the correct cost (miner fee + name
+                    # lock) for name operations where all inputs/outputs
+                    # belong to the local wallet.
+                    v_out_mine += txout.value_display
                     is_relevant = True
         delta = v_out_mine - v_in_mine
         if v_in is not None:
