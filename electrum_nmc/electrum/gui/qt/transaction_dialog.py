@@ -43,7 +43,7 @@ from electrum.simple_config import SimpleConfig
 from electrum.util import quantize_feerate
 from electrum.bitcoin import base_encode, COIN, NLOCKTIME_BLOCKHEIGHT_MAX
 from electrum.i18n import _
-from electrum.names import format_name_op, OP_NAME_NEW
+from electrum.names import format_name_op, NAME_LOCKED_VALUE, OP_NAME_NEW
 from electrum.plugin import run_hook
 from electrum import simple_config
 from electrum.transaction import SerializationError, Transaction, PartialTransaction, PartialTxInput
@@ -442,7 +442,7 @@ class BaseTxDialog(QDialog, MessageBoxMixin):
         name_fee = 0
         for o in self.tx.outputs():
             if o.name_op is not None and o.name_op['op'] == OP_NAME_NEW:
-                name_fee = COIN // 100
+                name_fee = NAME_LOCKED_VALUE
         size = self.tx.estimated_size()
         txid = self.tx.txid()
         fx = self.main_window.fx

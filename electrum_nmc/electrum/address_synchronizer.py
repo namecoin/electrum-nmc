@@ -39,7 +39,7 @@ from .verifier import SPV
 from .blockchain import hash_header
 from .i18n import _
 from .logging import Logger
-from .names import get_wallet_name_delta, name_expires_in
+from .names import get_wallet_name_delta, name_expires_in, NAME_LOCKED_VALUE
 
 if TYPE_CHECKING:
     from .network import Network
@@ -533,9 +533,9 @@ class AddressSynchronizer(Logger):
             if tx is not None:
                 sent_name, received_name, _ = get_wallet_name_delta(self, tx, domain)
                 if sent_name:
-                    delta += COIN // 100
+                    delta += NAME_LOCKED_VALUE
                 if received_name:
-                    delta -= COIN // 100
+                    delta -= NAME_LOCKED_VALUE
 
             tx_mined_status = self.get_tx_height(tx_hash)
             fee = self.get_tx_fee(tx_hash)
@@ -861,7 +861,7 @@ class AddressSynchronizer(Logger):
                         hidden_v = v
                     else:
                         # Name is unexpired; only hide the 0.01 NMC
-                        hidden_v = COIN // 100
+                        hidden_v = NAME_LOCKED_VALUE
 
             if is_cb and tx_height + COINBASE_MATURITY > mempool_height:
                 x += v - hidden_v

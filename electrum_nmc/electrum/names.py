@@ -27,6 +27,12 @@ from enum import Enum
 from typing import Dict, NamedTuple, Optional
 
 from . import constants
+from .bitcoin import COIN
+
+# Value in satoshis locked inside every name output (0.01 NMC).
+# This amount is required by consensus and is not spendable until the
+# name expires or is transferred.
+NAME_LOCKED_VALUE = COIN // 100
 
 def split_name_script(decoded):
     # This case happens if a script was malformed and couldn't be decoded by
