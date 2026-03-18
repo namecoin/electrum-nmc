@@ -174,7 +174,7 @@ class TxOutput:
 
         # Name ops include an extra 0.01 NMC locked inside the output, which we
         # hide here.
-        return self.value - COIN // 100
+        return self.value - NAME_LOCKED_VALUE
 
     @value_display.setter
     def value_display(self, value: Union[int, str]):
@@ -188,7 +188,7 @@ class TxOutput:
 
         # Name ops include an extra 0.01 NMC locked inside the output, which we
         # add here.
-        self.value = value + COIN // 100
+        self.value = value + NAME_LOCKED_VALUE
 
     def __repr__(self):
         return f"<TxOutput script={self.scriptpubkey.hex()} address={self.address} value={self.value}>"
@@ -1458,7 +1458,7 @@ class PartialTxInput(TxInput, PSBTSection):
 
         # Name ops include an extra 0.01 NMC locked inside the output, which we
         # hide here.
-        return self.value_sats() - COIN // 100
+        return self.value_sats() - NAME_LOCKED_VALUE
 
     @property
     def address(self) -> Optional[str]:
@@ -2217,4 +2217,4 @@ def unpack_bip32_root_fingerprint_and_int_path(path: bytes) -> Tuple[bytes, Sequ
     int_path = [int.from_bytes(b, byteorder='little', signed=False) for b in chunks(path[4:], 4)]
     return xfp, int_path
 
-from .names import get_name_op_from_output_script, name_op_to_json, name_op_to_script, OP_NAME_NEW, split_name_script
+from .names import get_name_op_from_output_script, name_op_to_json, name_op_to_script, NAME_LOCKED_VALUE, OP_NAME_NEW, split_name_script
