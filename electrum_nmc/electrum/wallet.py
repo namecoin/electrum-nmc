@@ -122,8 +122,21 @@ async def _append_utxos_to_inputs(*, inputs: List[PartialTxInput], network: 'Net
         prev_tx_raw = await network.get_transaction(item['tx_hash'])
         prev_tx = Transaction(prev_tx_raw)
         prev_txout = prev_tx.outputs()[item['tx_pos']]
-        if scripthash != bitcoin.script_to_scripthash(prev_txout.scriptpubkey.hex()):
-            raise Exception('scripthash mismatch when sweeping')
+        # For name outputs, the scriptPubKey includes a name prefix before the
+        # address script.  Compare using the address (which strips the name
+        # prefix) so that name UTXOs are accepted during sweep.
+        output_scripthash = bitcoin.script_to_scripthash(prev_txout.scriptpubkey.hex())
+        if scripthash != output_scripthash:
+            # The output may be a name output.  get_address_from_output_script
+            # strips the name prefix, so we can derive the address scripthash
+            # from the underlying address.
+            output_addr = prev_txout.address
+            if output_addr is not None:
+                addr_scripthash = bitcoin.address_to_scripthash(output_addr)
+                if scripthash != addr_scripthash:
+                    raise Exception('scripthash mismatch when sweeping')
+            else:
+                raise Exception('scripthash mismatch when sweeping')
         prevout_str = item['tx_hash'] + ':%d' % item['tx_pos']
         prevout = TxOutpoint.from_str(prevout_str)
         txin = PartialTxInput(prevout=prevout)
@@ -186,21 +199,58 @@ async def sweep(
         imax=100,
         locktime=None,
         tx_version=None) -> PartialTransaction:
+    from .names import OP_NAME_UPDATE
 
     inputs, keypairs = await sweep_preparations(privkeys, network, imax)
     total = sum(txin.value_sats() for txin in inputs)
+
+    # Identify name outputs that need to be transferred via name_update.
+    # Each name input requires a corresponding name_update output that
+    # preserves the name and its value at the destination address.
+    name_outputs = []
+    name_value_total = 0
+    for txin in inputs:
+        if txin.utxo is not None:
+            prev_output = txin.utxo.outputs()[txin.prevout.out_idx]
+            name_op = prev_output.name_op
+            if name_op is not None and "name" in name_op and "value" in name_op:
+                # Create a name_update output to transfer the name
+                name_txout = PartialTxOutput(
+                    scriptpubkey=bfh(bitcoin.address_to_script(to_address)),
+                    value=COIN // 100)  # 0.01 NMC locked in name output
+                name_txout.add_name_op({
+                    "op": OP_NAME_UPDATE,
+                    "name": name_op["name"],
+                    "value": name_op["value"],
+                })
+                name_outputs.append(name_txout)
+                name_value_total += COIN // 100
+
     if fee is None:
-        outputs = [PartialTxOutput(scriptpubkey=bfh(bitcoin.address_to_script(to_address)),
-                                   value=total)]
+        coin_value = total - name_value_total
+        outputs = name_outputs + [PartialTxOutput(
+            scriptpubkey=bfh(bitcoin.address_to_script(to_address)),
+            value=max(0, coin_value))]
         tx = PartialTransaction.from_io(inputs, outputs)
         fee = config.estimate_fee(tx.estimated_size())
-    if total - fee < 0:
+
+    remaining = total - fee - name_value_total
+    if remaining < 0:
         raise Exception(_('Not enough funds on address.') + '\nTotal: %d swartz\nFee: %d'%(total, fee))
-    if total - fee < dust_threshold(network):
+    if remaining < dust_threshold(network) and remaining > 0:
         raise Exception(_('Not enough funds on address.') + '\nTotal: %d swartz\nFee: %d\nDust Threshold: %d'%(total, fee, dust_threshold(network)))
 
-    outputs = [PartialTxOutput(scriptpubkey=bfh(bitcoin.address_to_script(to_address)),
-                               value=total - fee)]
+    # Build final outputs: name_update outputs first, then the coin output
+    outputs = list(name_outputs)
+    if remaining >= dust_threshold(network):
+        outputs.append(PartialTxOutput(
+            scriptpubkey=bfh(bitcoin.address_to_script(to_address)),
+            value=remaining))
+    elif not name_outputs:
+        # No name outputs and remaining is below dust — can't sweep
+        raise Exception(_('Not enough funds on address.') + '\nTotal: %d swartz\nFee: %d\nDust Threshold: %d'%(total, fee, dust_threshold(network)))
+    # else: name-only sweep with no extra coin output (remaining < dust)
+
     if locktime is None:
         locktime = get_locktime_for_new_transaction(network)
 
