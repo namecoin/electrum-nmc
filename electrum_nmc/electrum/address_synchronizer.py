@@ -353,12 +353,26 @@ class AddressSynchronizer(Logger):
     def queue_transaction(self, tx_hash, tx_queue_item):
         with self.transaction_lock:
             self.db.queued_transactions[tx_hash] = tx_queue_item
+        # Also add the queued transaction to local history so that its
+        # addresses (especially change addresses) are tracked as "used".
+        # Without this, change addresses from queued transactions can be
+        # reused by subsequent transactions, violating address reuse
+        # prevention.  (See #253.)
+        tx_hex = tx_queue_item.get("tx")
+        if tx_hex:
+            tx = Transaction(tx_hex)
+            self.add_transaction(tx)
         return True
 
     def unqueue_transaction(self, tx_hash):
         with self.transaction_lock:
             if tx_hash in self.db.queued_transactions:
                 del self.db.queued_transactions[tx_hash]
+        # Also remove from local history, since queue_transaction added it.
+        try:
+            self.remove_transaction(tx_hash)
+        except Exception:
+            pass
         return True
 
     def remove_transaction(self, tx_hash: str) -> None:
