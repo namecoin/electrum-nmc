@@ -1606,6 +1606,127 @@ class Commands:
 
         raise Exception("missing name op (txid {})".format(txid))
 
+    @command('n')
+    async def name_history(self, identifier, name_encoding='ascii', value_encoding='ascii', wallet: Abstract_Wallet = None):
+        """Look up the history of updates for the given name.  Returns a list
+        of all name operations for the identifier, ordered by block height
+        (oldest first).  Each entry includes SPV-verified name, value, txid,
+        vout, address, and height.  Modelled after Namecoin Core's
+        name_history RPC.
+        """
+
+        name_encoding = Encoding(name_encoding)
+        value_encoding = Encoding(value_encoding)
+
+        identifier_bytes = name_from_str(identifier, name_encoding)
+        sh = name_identifier_to_scripthash(identifier_bytes)
+
+        txs = await self.network.get_history_for_scripthash(sh)
+
+        if not txs:
+            raise NameNeverExistedError("Name purportedly never existed")
+
+        local_chain_height = self.network.get_local_height()
+
+        results = []
+        for tx_item in txs:
+            txid = tx_item["tx_hash"]
+            height = tx_item["height"]
+
+            # Skip unconfirmed transactions (height <= 0)
+            if height <= 0:
+                continue
+
+            # SPV verification: request and verify merkle proof
+            try:
+                # Ensure we have the header
+                header = self.network.blockchain().read_header(height)
+                if header is None:
+                    if height < constants.net.max_checkpoint():
+                        await self.network.request_chunk(height, None)
+
+                merkle = await self.network.get_merkle_for_transaction(txid, height)
+                if height != merkle.get('block_height'):
+                    continue
+                pos = merkle.get('pos')
+                merkle_branch = merkle.get('merkle')
+                async def wait_for_header(h=height):
+                    async with self.network.bhi_lock:
+                        return self.network.blockchain().read_header(h)
+                header = await wait_for_header()
+                verify_tx_is_in_block(txid, merkle_branch, pos, header, height)
+            except Exception:
+                # If SPV verification fails, skip this transaction
+                continue
+
+            # Fetch the transaction
+            if wallet and txid in wallet.db.transactions:
+                tx = wallet.db.transactions[txid]
+            else:
+                raw = await self.network.get_transaction(txid)
+                if raw:
+                    tx = Transaction(raw)
+                else:
+                    continue
+
+            if tx.txid() != txid:
+                continue
+
+            # Extract name operations from the transaction
+            for idx, o in enumerate(tx.outputs()):
+                if o.name_op is not None:
+                    if "name" in o.name_op:
+                        if o.name_op["name"] != identifier_bytes:
+                            continue
+
+                        expires_in, expires_time = name_expiration_datetime_estimate(height, self.network.blockchain())
+                        expired = expires_in <= 0 if expires_in is not None else None
+
+                        semi_expires_in, semi_expires_time = name_expiration_datetime_estimate(height, self.network.blockchain(), blocks_func=name_semi_expires_in)
+                        semi_expired = semi_expires_in <= 0 if semi_expires_in is not None else None
+
+                        is_mine = None
+                        if wallet:
+                            is_mine = wallet.is_mine(o.address)
+
+                        op_type = None
+                        if o.name_op.get("op") == OP_NAME_FIRSTUPDATE:
+                            op_type = "name_firstupdate"
+                        elif o.name_op.get("op") == OP_NAME_UPDATE:
+                            op_type = "name_update"
+                        elif o.name_op.get("op") == OP_NAME_NEW:
+                            op_type = "name_new"
+
+                        result_item = {
+                            "name": name_to_str(o.name_op["name"], name_encoding),
+                            "name_encoding": name_encoding.value,
+                            "value": name_to_str(o.name_op["value"], value_encoding),
+                            "value_encoding": value_encoding.value,
+                            "txid": txid,
+                            "vout": idx,
+                            "address": o.address,
+                            "height": height,
+                            "expires_in": expires_in,
+                            "expires_time": round(expires_time.timestamp()),
+                            "expired": expired,
+                            "semi_expires_in": semi_expires_in,
+                            "semi_expires_time": round(semi_expires_time.timestamp()),
+                            "semi_expired": semi_expired,
+                            "ismine": is_mine,
+                        }
+                        if op_type is not None:
+                            result_item["op"] = op_type
+                        results.append(result_item)
+                        break  # Only one name op per transaction
+
+        if not results:
+            raise NameNeverExistedError("Name purportedly never existed")
+
+        # Sort by height (oldest first), matching Namecoin Core behavior
+        results.sort(key=lambda x: x["height"])
+
+        return results
+
     @command('w')
     async def removelocaltx(self, txid, wallet: Abstract_Wallet = None):
         """Remove a 'local' transaction from the wallet, and its dependent
