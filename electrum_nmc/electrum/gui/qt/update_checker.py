@@ -4,7 +4,10 @@
 
 import asyncio
 import base64
-from distutils.version import StrictVersion
+try:
+    from packaging.version import Version as StrictVersion
+except ImportError:
+    from distutils.version import StrictVersion
 
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QLabel, QProgressBar,

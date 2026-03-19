@@ -26,7 +26,7 @@ from aiorpcx import run_in_thread, TaskGroup, NetAddress, ignore_after
 
 from . import constants, util
 from . import keystore
-from .util import profiler, chunks
+from .util import profiler, chunks, _get_or_create_event_loop
 from .invoices import PR_TYPE_LN, PR_UNPAID, PR_EXPIRED, PR_PAID, PR_INFLIGHT, PR_FAILED, PR_ROUTING, LNInvoice, LN_EXPIRY_NEVER
 from .util import NetworkRetryManager, JsonRPCClient
 from .lnutil import LN_MAX_FUNDING_SAT
@@ -497,7 +497,7 @@ class LNWorker(Logger, NetworkRetryManager[LNPeerAddr]):
             # Try DNS-resolving the host (if needed). This is simply so that
             # the caller gets a nice exception if it cannot be resolved.
             try:
-                await asyncio.get_event_loop().getaddrinfo(host, port)
+                await _get_or_create_event_loop().getaddrinfo(host, port)
             except socket.gaierror:
                 raise ConnStringFormatError(_('Hostname does not resolve (getaddrinfo failed)'))
             # add peer
