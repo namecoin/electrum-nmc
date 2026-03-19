@@ -40,7 +40,7 @@ from aiorpcx import TaskGroup, timeout_after, TaskTimeout, ignore_after
 
 from . import util
 from .network import Network
-from .util import (json_decode, to_bytes, to_string, profiler, standardize_path, constant_time_compare)
+from .util import (json_decode, to_bytes, to_string, profiler, standardize_path, constant_time_compare, _get_or_create_event_loop)
 from .invoices import PR_PAID, PR_EXPIRED
 from .util import log_exceptions, ignore_exceptions, randrange
 from .wallet import Wallet, Abstract_Wallet
@@ -102,7 +102,7 @@ def request(config: SimpleConfig, endpoint, args=(), timeout=60):
         rpc_user, rpc_password = get_rpc_credentials(config)
         server_url = 'http://%s:%d' % (host, port)
         auth = aiohttp.BasicAuth(login=rpc_user, password=rpc_password)
-        loop = asyncio.get_event_loop()
+        loop = _get_or_create_event_loop()
         async def request_coroutine():
             async with aiohttp.ClientSession(auth=auth) as session:
                 c = util.JsonRPCClient(session, server_url)
@@ -427,7 +427,7 @@ class Daemon(Logger):
         if 'wallet_path' in config.cmdline_options:
             self.logger.warning("Ignoring parameter 'wallet_path' for daemon. "
                                 "Use the load_wallet command instead.")
-        self.asyncio_loop = asyncio.get_event_loop()
+        self.asyncio_loop = _get_or_create_event_loop()
         self.network = None
         if not config.get('offline'):
             self.network = Network(config, daemon=self)

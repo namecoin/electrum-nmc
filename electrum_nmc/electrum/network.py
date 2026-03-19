@@ -44,7 +44,7 @@ from aiorpcx import TaskGroup, ignore_after
 from aiohttp import ClientResponse
 
 from . import util
-from .util import (log_exceptions, ignore_exceptions,
+from .util import (log_exceptions, ignore_exceptions, _get_or_create_event_loop,
                    bfh, SilentTaskGroup, make_aiohttp_session, send_exception_to_crash_reporter,
                    is_hash256_str, is_non_negative_integer, MyEncoder, NetworkRetryManager,
                    nullcontext)
@@ -273,7 +273,7 @@ class Network(Logger, NetworkRetryManager[ServerAddr]):
             init_retry_delay_urgent=1,
         )
 
-        self.asyncio_loop = asyncio.get_event_loop()
+        self.asyncio_loop = _get_or_create_event_loop()
         assert self.asyncio_loop.is_running(), "event loop not running"
         try:
             self._loop_thread = self.asyncio_loop._mythread  # type: threading.Thread  # only used for sanity checks
@@ -1385,7 +1385,7 @@ class Network(Logger, NetworkRetryManager[ServerAddr]):
             assert network._loop_thread is not threading.currentThread()
             loop = network.asyncio_loop
         else:
-            loop = asyncio.get_event_loop()
+            loop = _get_or_create_event_loop()
         coro = asyncio.run_coroutine_threadsafe(cls._send_http_on_proxy(method, url, **kwargs), loop)
         # note: _send_http_on_proxy has its own timeout, so no timeout here:
         return coro.result()

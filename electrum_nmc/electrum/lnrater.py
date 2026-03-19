@@ -20,7 +20,7 @@ else:
     from asyncio import _get_running_loop as get_running_loop  # noqa: F401
 
 from .logging import Logger
-from .util import profiler
+from .util import profiler, _get_or_create_event_loop
 from .lnrouter import fee_for_edge_msat
 from .lnutil import LnFeatures, ln_compare_features, IncompatibleLightningFeatures
 
@@ -91,14 +91,14 @@ class LNRater(Logger):
         self._last_progress_percent = 0
 
     def maybe_analyze_graph(self):
-        loop = asyncio.get_event_loop()
+        loop = _get_or_create_event_loop()
         fut = asyncio.run_coroutine_threadsafe(self._maybe_analyze_graph(), loop)
         fut.result()
 
     def analyze_graph(self):
         """Forces a graph analysis, e.g., due to external triggers like
         the graph info reaching 50%."""
-        loop = asyncio.get_event_loop()
+        loop = _get_or_create_event_loop()
         fut = asyncio.run_coroutine_threadsafe(self._analyze_graph(), loop)
         fut.result()
 

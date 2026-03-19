@@ -39,7 +39,7 @@ from decimal import Decimal
 from typing import Optional, TYPE_CHECKING, Dict, List
 
 from .import util, ecc
-from .util import (bfh, bh2u, format_satoshis, json_decode, json_normalize,
+from .util import (bfh, bh2u, format_satoshis, json_decode, json_normalize, _get_or_create_event_loop,
                    is_hash256_str, is_hex_str, to_bytes)
 from . import bitcoin
 from .bitcoin import is_address,  hash_160, COIN
@@ -210,7 +210,7 @@ class Commands:
                 kwargs.pop('wallet')
 
         coro = f(*args, **kwargs)
-        fut = asyncio.run_coroutine_threadsafe(coro, asyncio.get_event_loop())
+        fut = asyncio.run_coroutine_threadsafe(coro, _get_or_create_event_loop())
         result = fut.result()
 
         if self._callback:

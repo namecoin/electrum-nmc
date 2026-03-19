@@ -38,6 +38,20 @@ import asyncio
 import urllib.request, urllib.parse, urllib.error
 import builtins
 import json
+
+
+def _get_or_create_event_loop() -> asyncio.AbstractEventLoop:
+    """Get the running event loop, or create and set a new one.
+
+    Python 3.10+ deprecated asyncio.get_event_loop() when no running loop
+    exists, and Python 3.12+ raises RuntimeError in that case.
+    """
+    try:
+        return asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        return loop
 import time
 from typing import NamedTuple, Optional
 import ssl
@@ -912,7 +926,7 @@ def parse_URI(uri: str, on_pr: Callable = None, *, loop=None) -> dict:
                 request = await pr.get_payment_request(r)
             if on_pr:
                 on_pr(request)
-        loop = loop or asyncio.get_event_loop()
+        loop = loop or _get_or_create_event_loop()
         asyncio.run_coroutine_threadsafe(get_payment_request(), loop)
 
     return out
@@ -1200,7 +1214,7 @@ def create_and_start_event_loop() -> Tuple[asyncio.AbstractEventLoop,
             return
         loop.default_exception_handler(context)
 
-    loop = asyncio.get_event_loop()
+    loop = _get_or_create_event_loop()
     loop.set_exception_handler(on_exception)
     # loop.set_debug(1)
     stopping_fut = asyncio.Future()
@@ -1363,7 +1377,7 @@ class CallbackManager:
         on the event loop.
         """
         if self.asyncio_loop is None:
-            self.asyncio_loop = asyncio.get_event_loop()
+            self.asyncio_loop = _get_or_create_event_loop()
             assert self.asyncio_loop.is_running(), "event loop not running"
         with self.callback_lock:
             callbacks = self.callbacks[event][:]
@@ -1448,7 +1462,7 @@ class NetworkRetryManager(Generic[_NetAddrType]):
 class MySocksProxy(aiorpcx.SOCKSProxy):
 
     async def open_connection(self, host=None, port=None, **kwargs):
-        loop = asyncio.get_event_loop()
+        loop = _get_or_create_event_loop()
         reader = asyncio.StreamReader(loop=loop)
         protocol = asyncio.StreamReaderProtocol(reader, loop=loop)
         transport, _ = await self.create_connection(
