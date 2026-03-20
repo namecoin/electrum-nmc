@@ -832,22 +832,22 @@ class ConfigureDNSDialog(QDialog, MessageBoxMixin):
 
     # This function is called when the tab is changed, to revalidate the input
     def validations_on_tab_changed(self):
-        match self.ui.tabRecords.currentIndex():
-            case 0:
-                self.validate_address_input()
-            case 1:
-                self.validate_CNAME_input()
-            case 2:
-                self.validate_NS_input()
-            case 3:
-                self.validate_DS_input()
-            case 4:
-                self.validate_TLS_input()
-            case 5:
-                self.validate_SRV_input()
-            case 7:
-                self.validate_IMPORT_input()
-            case 8:
-                self.validate_SSH_input()
-            case _:
-                self.ui.ErrorLabel.clear()
+        _idx = self.ui.tabRecords.currentIndex()
+        if _idx == 0:
+            self.validate_address_input()
+        elif _idx == 1:
+            self.validate_CNAME_input()
+        elif _idx == 2:
+            self.validate_NS_input()
+        elif _idx == 3:
+            self.validate_DS_input()
+        elif _idx == 4:
+            self.validate_TLS_input()
+        elif _idx == 5:
+            self.validate_SRV_input()
+        elif _idx == 7:
+            self.validate_IMPORT_input()
+        elif _idx == 8:
+            self.validate_SSH_input()
+        else:
+            self.ui.ErrorLabel.clear()

@@ -133,19 +133,18 @@ def validate_value_length(value: bytes):
         raise BitcoinException('value length {} exceeds limit of {}'.format(value_length, value_length_limit))
 
 def validate_A_record(address: str, address_type: str) -> None:
-    match address_type:
-        case 'IPv4':
-            return validate_ipv4_address(address)
-        case 'IPv6':
-            return validate_ipv6_address(address)
-        case 'Tor':
-            return validate_onion_address(address)
-        case 'I2P':
-            return validate_i2p_address(address)
-        case 'ZeroNet':
-            return validate_zeronet_address(address)
-        case 'Freenet':
-            return validate_freenet_address(address)
+    if address_type == 'IPv4':
+        return validate_ipv4_address(address)
+    elif address_type == 'IPv6':
+        return validate_ipv6_address(address)
+    elif address_type == 'Tor':
+        return validate_onion_address(address)
+    elif address_type == 'I2P':
+        return validate_i2p_address(address)
+    elif address_type == 'ZeroNet':
+        return validate_zeronet_address(address)
+    elif address_type == 'Freenet':
+        return validate_freenet_address(address)
 
 def validate_onion_address(address: str) -> None:
     if not address == address.lower():
@@ -353,13 +352,12 @@ def validate_DNSSEC(Hash: str, HashType: int, Algorithm: int) -> None:
 
         # Validate HashType
         if HashType:
-            match HashType:
-                case 1:
-                    raise Exception("Warning: Insecure hash algorithm SHA-1 (HashType 1)")
-                case 2:
-                    pass  # SHA-256 is accepted
-                case _:
-                    raise Exception(f"Warning: Unknown hash algorithm {HashType}")
+            if HashType == 1:
+                raise Exception("Warning: Insecure hash algorithm SHA-1 (HashType 1)")
+            elif HashType == 2:
+                pass  # SHA-256 is accepted
+            else:
+                raise Exception(f"Warning: Unknown hash algorithm {HashType}")
 
         if Algorithm:
             if Algorithm in [15,16]:
@@ -396,13 +394,12 @@ def validate_SSH(Algorithm:int, FingerprintType:int, Fingerprint: str) -> None:
         
         if FingerprintType:
             # SSH Fingerprint Types https://www.iana.org/assignments/dns-sshfp-rr-parameters/dns-sshfp-rr-parameters.xhtml#dns-sshfp-rr-parameters-2
-            match FingerprintType:
-                case 1:
-                    raise Exception("Warning: Insecure hash algorithm SHA-1 (HashType 1)")
-                case 2:
-                    pass  # SHA-256 is accepted
-                case _:
-                    raise Exception(f"Warning: Unknown hash algorithm {FingerprintType}")
+            if FingerprintType == 1:
+                raise Exception("Warning: Insecure hash algorithm SHA-1 (HashType 1)")
+            elif FingerprintType == 2:
+                pass  # SHA-256 is accepted
+            else:
+                raise Exception(f"Warning: Unknown hash algorithm {FingerprintType}")
         
         if Algorithm:
             # SSH Algorithms https://www.iana.org/assignments/dns-sshfp-rr-parameters/dns-sshfp-rr-parameters.xhtml#dns-sshfp-rr-parameters-1
