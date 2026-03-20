@@ -19,7 +19,7 @@ source.include_exts = py,png,jpg,kv,atlas,ttf,txt,gif,pem,mo,vs,fs,json,csv
 source.exclude_exts = spec
 
 # (list) List of directory to exclude (let empty to not exclude anything)
-source.exclude_dirs = bin, build, dist, contrib,
+source.exclude_dirs = bin, build, dist, contrib, venv, .venv,
     electrum_nmc/electrum/tests,
     electrum_nmc/electrum/gui/qt,
     electrum_nmc/electrum/gui/kivy/theming/light,
