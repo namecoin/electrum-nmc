@@ -49,12 +49,42 @@
         "s": "57002",
         "version": "1.4"
     },
+    "i665jpwsq46zlsdbnj4axgzd3s56uzey5uhotsnxzsknzbn36jaddsid.onion": {
+        "pruning": "-",
+        "s": "50002",
+        "version": "1.4"
+    },
     "h6qrnwxtwiaahsw4qhk2nbutswwb54vnqso6jrxeuk6nwtfbos7jkoqd.onion": {
         "pruning": "-",
         "s": "50002",
         "version": "1.4.3"
     },
+    "162.212.154.52": {
+        "pruning": "-",
+        "s": "50002",
+        "version": "1.4"
+    },
+    "23.158.233.10": {
+        "pruning": "-",
+        "s": "50002",
+        "version": "1.4"
+    },
+    "6cbn4rskfdr647otej7gpqlmpqcmj723vg2eoeuu7ljbwu6cpdebozyd.onion": {
+        "pruning": "-",
+        "t": "50001",
+        "version": "1.4"
+    },
     "82.119.233.36": {
+        "pruning": "-",
+        "s": "50002",
+        "version": "1.4"
+    },
+    "electrumx.testls.space": {
+        "pruning": "-",
+        "s": "50002",
+        "version": "1.4"
+    },
+    "relay.testls.bit": {
         "pruning": "-",
         "s": "50002",
         "version": "1.4"
