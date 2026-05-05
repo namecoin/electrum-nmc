@@ -418,11 +418,31 @@ class Commands:
             height = coin["height"]
             local_chain_height = self.network.get_local_height()
 
-            expires_in, expires_time = name_expiration_datetime_estimate(height, self.network.blockchain())
-            expired = expires_in <= 0 if expires_in is not None else None
+            # A non-positive block height means the UTXO is in the mempool
+            # (mempool / unconfirmed parent / local).  Surface that as an
+            # explicit "pending" flag and an "op" field describing the
+            # unconfirmed name operation, mirroring namecoin-core's
+            # name_pending output so wallet UIs can use the same field
+            # names regardless of backend.
+            is_pending = height is not None and height <= 0
 
-            semi_expires_in, semi_expires_time = name_expiration_datetime_estimate(height, self.network.blockchain(), blocks_func=name_semi_expires_in)
-            semi_expired = semi_expires_in <= 0 if semi_expires_in is not None else None
+            if is_pending:
+                # Expiration is meaningless for an unconfirmed UTXO: it has
+                # no canonical chain height yet.  Emit None so callers see
+                # the field as null rather than a misleading number derived
+                # from a placeholder height.
+                expires_in = None
+                expires_time = None
+                expired = None
+                semi_expires_in = None
+                semi_expires_time = None
+                semi_expired = None
+            else:
+                expires_in, expires_time = name_expiration_datetime_estimate(height, self.network.blockchain())
+                expired = expires_in <= 0 if expires_in is not None else None
+
+                semi_expires_in, semi_expires_time = name_expiration_datetime_estimate(height, self.network.blockchain(), blocks_func=name_semi_expires_in)
+                semi_expired = semi_expires_in <= 0 if semi_expires_in is not None else None
 
             is_mine = wallet.is_mine(address)
 
@@ -436,13 +456,20 @@ class Commands:
                 "address": address,
                 "height": height,
                 "expires_in": expires_in,
-                "expires_time": round(expires_time.timestamp()),
+                "expires_time": round(expires_time.timestamp()) if expires_time is not None else None,
                 "expired": expired,
                 "semi_expires_in": semi_expires_in,
-                "semi_expires_time": round(semi_expires_time.timestamp()),
+                "semi_expires_time": round(semi_expires_time.timestamp()) if semi_expires_time is not None else None,
                 "semi_expired": semi_expired,
                 "ismine": is_mine,
             }
+            if is_pending:
+                result_item["pending"] = True
+                op_code = name_op.get("op")
+                if op_code == OP_NAME_FIRSTUPDATE:
+                    result_item["op"] = "name_firstupdate"
+                elif op_code == OP_NAME_UPDATE:
+                    result_item["op"] = "name_update"
             result.append(result_item)
 
         return result
