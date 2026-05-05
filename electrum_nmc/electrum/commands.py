@@ -1596,10 +1596,10 @@ class Commands:
                         "address": o.address,
                         "height": height,
                         "expires_in": expires_in,
-                        "expires_time": round(expires_time.timestamp()),
+                        "expires_time": round(expires_time.timestamp()) if expires_time is not None else None,
                         "expired": False,
                         "semi_expires_in": semi_expires_in,
-                        "semi_expires_time": round(semi_expires_time.timestamp()),
+                        "semi_expires_time": round(semi_expires_time.timestamp()) if semi_expires_time is not None else None,
                         "semi_expired": False,
                         "ismine": is_mine,
                     }
