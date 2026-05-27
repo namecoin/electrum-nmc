@@ -8,6 +8,7 @@ from electrum import constants
 from electrum.i18n import _
 from electrum.plugin import Device, runs_in_hwd_thread
 from electrum.transaction import Transaction, PartialTransaction, PartialTxInput, PartialTxOutput
+from electrum.names import OP_NAME_NEW, OP_NAME_FIRSTUPDATE, OP_NAME_UPDATE
 from electrum.keystore import Hardware_KeyStore
 from electrum.base_wizard import ScriptTypeNotSupported, HWD_SETUP_NEW_WALLET
 from electrum.logging import get_logger
@@ -31,6 +32,16 @@ try:
         Capability, BackupType, RecoveryDeviceType, HDNodeType, HDNodePathType,
         InputScriptType, OutputScriptType, MultisigRedeemScriptType,
         TxInputType, TxOutputType, TxOutputBinType, TransactionType, SignTx)
+
+    try:
+        # Namecoin name-operation support requires a trezorlib release that
+        # includes the firmware changes from
+        # https://github.com/trezor/trezor-firmware/pull/7010
+        # (adds OutputScriptType.PAYTONAMECOINOP and the NamecoinOp message).
+        from trezorlib.messages import NamecoinOp
+    except ImportError:
+        NamecoinOp = None
+    PAYTONAMECOINOP = getattr(OutputScriptType, 'PAYTONAMECOINOP', None)
 
     from trezorlib.client import PASSPHRASE_ON_DEVICE
 
@@ -448,6 +459,52 @@ class TrezorPlugin(HW_PluginBase):
         def create_output_by_address():
             txoutputtype = TxOutputType()
             txoutputtype.amount = txout.value
+            if txout.name_op is not None:
+                # Namecoin name operation: build a structured NamecoinOp
+                # sub-message so the device can display the name (and value,
+                # where applicable) on its trusted screen before signing.
+                # Requires firmware/trezorlib support from
+                # https://github.com/trezor/trezor-firmware/pull/7010.
+                if NamecoinOp is None or PAYTONAMECOINOP is None:
+                    raise UserFacingException(_(
+                        "Signing Namecoin name operations on Trezor requires "
+                        "a newer trezorlib release that includes NamecoinOp "
+                        "support. Please upgrade the `trezor` Python package."))
+                if not address:
+                    raise UserFacingException(_(
+                        "Name-op output has no recipient address; cannot sign."))
+                op = txout.name_op
+                op_code = op["op"]
+                # NameOpKind values mirror the firmware enum:
+                #   NAME_NEW = 0, NAME_FIRSTUPDATE = 1, NAME_UPDATE = 2.
+                NameOpKind = NamecoinOp.NameOpKind
+                if op_code == OP_NAME_NEW:
+                    nmc_op = NamecoinOp(
+                        kind=NameOpKind.NAME_NEW,
+                        commitment_hash=op["commitment"],
+                    )
+                elif op_code == OP_NAME_FIRSTUPDATE:
+                    # electrum-nmc stores the registration nonce under the
+                    # key `salt`; the firmware proto field is named `rand`.
+                    nmc_op = NamecoinOp(
+                        kind=NameOpKind.NAME_FIRSTUPDATE,
+                        name=op["name"],
+                        rand=op["salt"],
+                        value=op["value"],
+                    )
+                elif op_code == OP_NAME_UPDATE:
+                    nmc_op = NamecoinOp(
+                        kind=NameOpKind.NAME_UPDATE,
+                        name=op["name"],
+                        value=op["value"],
+                    )
+                else:
+                    raise UserFacingException(
+                        _("Unknown name-operation opcode: {}").format(op_code))
+                txoutputtype.script_type = PAYTONAMECOINOP
+                txoutputtype.address = address
+                txoutputtype.namecoin_op = nmc_op
+                return txoutputtype
             if address:
                 txoutputtype.script_type = OutputScriptType.PAYTOADDRESS
                 txoutputtype.address = address
