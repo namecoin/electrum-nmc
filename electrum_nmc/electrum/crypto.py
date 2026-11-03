@@ -179,9 +179,9 @@ def DecodeAES_bytes(secret: bytes, ciphertext: bytes) -> bytes:
     return s
 
 
-PW_HASH_VERSION_LATEST = 1
+PW_HASH_VERSION_LATEST = 2
 KNOWN_PW_HASH_VERSIONS = (1, 2,)
-SUPPORTED_PW_HASH_VERSIONS = (1,)
+SUPPORTED_PW_HASH_VERSIONS = (1, 2,)
 assert PW_HASH_VERSION_LATEST in KNOWN_PW_HASH_VERSIONS
 assert PW_HASH_VERSION_LATEST in SUPPORTED_PW_HASH_VERSIONS
 
@@ -209,12 +209,29 @@ class UnsupportedPasswordHashVersion(InvalidPassword, WalletFileException):
                         "Alternatively, restore from seed.")
 
 
-def _hash_password(password: Union[bytes, str], *, version: int) -> bytes:
+SCRYPT_N = 2 ** 15
+SCRYPT_R = 8
+SCRYPT_P = 1
+SCRYPT_SALT_SIZE = 16
+
+
+def _scrypt(password: bytes, salt: bytes) -> bytes:
+    # 32 MiB of memory. OpenSSL's default maxmem can be too low for this.
+    return hashlib.scrypt(password, salt=salt, n=SCRYPT_N, r=SCRYPT_R,
+                          p=SCRYPT_P, dklen=32, maxmem=64 * 1024 * 1024)
+
+
+def _hash_password(password: Union[bytes, str], *, version: int,
+                   salt: bytes = b'') -> bytes:
     pw = to_bytes(password, 'utf8')
     if version not in SUPPORTED_PW_HASH_VERSIONS:
         raise UnsupportedPasswordHashVersion(version)
     if version == 1:
         return sha256d(pw)
+    elif version == 2:
+        if len(salt) != SCRYPT_SALT_SIZE:
+            raise ValueError('invalid scrypt salt length')
+        return _scrypt(pw, salt)
     else:
         assert version not in KNOWN_PW_HASH_VERSIONS
         raise UnexpectedPasswordHashVersion(version)
@@ -224,17 +241,24 @@ def _pw_encode_raw(data: bytes, password: Union[bytes, str], *, version: int) ->
     if version not in KNOWN_PW_HASH_VERSIONS:
         raise UnexpectedPasswordHashVersion(version)
     # derive key from password
-    secret = _hash_password(password, version=version)
+    salt = os.urandom(SCRYPT_SALT_SIZE) if version == 2 else b''
+    secret = _hash_password(password, version=version, salt=salt)
     # encrypt given data
     ciphertext = EncodeAES_bytes(secret, data)
-    return ciphertext
+    return salt + ciphertext
 
 
 def _pw_decode_raw(data_bytes: bytes, password: Union[bytes, str], *, version: int) -> bytes:
     if version not in KNOWN_PW_HASH_VERSIONS:
         raise UnexpectedPasswordHashVersion(version)
     # derive key from password
-    secret = _hash_password(password, version=version)
+    if version == 2:
+        if len(data_bytes) < SCRYPT_SALT_SIZE + 32:
+            raise InvalidPassword()
+        salt, data_bytes = data_bytes[:SCRYPT_SALT_SIZE], data_bytes[SCRYPT_SALT_SIZE:]
+    else:
+        salt = b''
+    secret = _hash_password(password, version=version, salt=salt)
     # decrypt given data
     try:
         d = DecodeAES_bytes(secret, data_bytes)

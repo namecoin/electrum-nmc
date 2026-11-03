@@ -62,6 +62,7 @@ class WalletStorage(Logger):
         self._file_exists = bool(self.path and os.path.exists(self.path))
         self.logger.info(f"wallet path {self.path}")
         self.pubkey = None
+        self._password_salt = None
         self.decrypted = ''
         try:
             test_read_write_permissions(self.path)
@@ -135,7 +136,7 @@ class WalletStorage(Logger):
     def _init_encryption_version(self):
         try:
             magic = base64.b64decode(self.raw)[0:4]
-            if magic == b'BIE1':
+            if magic in (b'BIE1', b'BIE3'):
                 return StorageEncryptionVersion.USER_PASSWORD
             elif magic == b'BIE2':
                 return StorageEncryptionVersion.XPUB_PASSWORD
@@ -145,15 +146,23 @@ class WalletStorage(Logger):
             return StorageEncryptionVersion.PLAINTEXT
 
     @staticmethod
-    def get_eckey_from_password(password):
-        secret = hashlib.pbkdf2_hmac('sha512', password.encode('utf-8'), b'', iterations=1024)
+    def get_eckey_from_password(password, salt=None):
+        if salt is None:
+            # Legacy BIE1 and BIE2 key derivation.
+            secret = hashlib.pbkdf2_hmac('sha512', password.encode('utf-8'), b'', iterations=1024)
+        else:
+            if len(salt) != 16:
+                raise ValueError('invalid scrypt salt length')
+            secret = hashlib.scrypt(password.encode('utf-8'), salt=salt,
+                                    n=2 ** 15, r=8, p=1, dklen=64,
+                                    maxmem=64 * 1024 * 1024)
         ec_key = ecc.ECPrivkey.from_arbitrary_size_secret(secret)
         return ec_key
 
     def _get_encryption_magic(self):
         v = self._encryption_version
         if v == StorageEncryptionVersion.USER_PASSWORD:
-            return b'BIE1'
+            return b'BIE3' if self._password_salt is not None else b'BIE1'
         elif v == StorageEncryptionVersion.XPUB_PASSWORD:
             return b'BIE2'
         else:
@@ -162,12 +171,21 @@ class WalletStorage(Logger):
     def decrypt(self, password) -> None:
         if self.is_past_initial_decryption():
             return
-        ec_key = self.get_eckey_from_password(password)
         if self.raw:
-            enc_magic = self._get_encryption_magic()
-            s = zlib.decompress(ec_key.decrypt_message(self.raw, enc_magic))
+            raw = base64.b64decode(self.raw)
+            ecies_raw = self.raw
+            if raw[:4] == b'BIE3':
+                if len(raw) < 20:
+                    raise InvalidPassword()
+                self._password_salt = raw[4:20]
+                ecies_raw = base64.b64encode(b'BIE1' + raw[20:]).decode('ascii')
+            ec_key = self.get_eckey_from_password(password, self._password_salt)
+            ecies_magic = b'BIE2' if raw[:4] == b'BIE2' else b'BIE1'
+            # BIE3 wraps a standard BIE1 ECIES payload plus a KDF salt.
+            s = zlib.decompress(ec_key.decrypt_message(ecies_raw, ecies_magic))
             s = s.decode('utf8')
         else:
+            ec_key = self.get_eckey_from_password(password)
             s = ''
         self.pubkey = ec_key.get_public_key_hex()
         self.decrypted = s
@@ -179,7 +197,11 @@ class WalletStorage(Logger):
             c = zlib.compress(s, level=zlib.Z_BEST_SPEED)
             enc_magic = self._get_encryption_magic()
             public_key = ecc.ECPubkey(bfh(self.pubkey))
-            s = public_key.encrypt_message(c, enc_magic)
+            s = public_key.encrypt_message(c, b'BIE1')
+            if enc_magic == b'BIE3':
+                encrypted = base64.b64decode(s)
+                # The salt belongs to the outer KDF envelope, not ECIES auth.
+                s = base64.b64encode(b'BIE3' + self._password_salt + encrypted[4:])
             s = s.decode('utf8')
         return s
 
@@ -190,7 +212,7 @@ class WalletStorage(Logger):
         if not self.is_past_initial_decryption():
             self.decrypt(password)  # this sets self.pubkey
         assert self.pubkey is not None
-        if self.pubkey != self.get_eckey_from_password(password).get_public_key_hex():
+        if self.pubkey != self.get_eckey_from_password(password, self._password_salt).get_public_key_hex():
             raise InvalidPassword()
 
     def set_password(self, password, enc_version=None):
@@ -200,11 +222,13 @@ class WalletStorage(Logger):
         if enc_version is None:
             enc_version = self._encryption_version
         if password and enc_version != StorageEncryptionVersion.PLAINTEXT:
-            ec_key = self.get_eckey_from_password(password)
+            self._password_salt = os.urandom(16) if enc_version == StorageEncryptionVersion.USER_PASSWORD else None
+            ec_key = self.get_eckey_from_password(password, self._password_salt)
             self.pubkey = ec_key.get_public_key_hex()
             self._encryption_version = enc_version
         else:
             self.pubkey = None
+            self._password_salt = None
             self._encryption_version = StorageEncryptionVersion.PLAINTEXT
 
     def basename(self) -> str:
