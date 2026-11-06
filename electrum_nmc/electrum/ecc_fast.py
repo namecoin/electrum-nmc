@@ -39,7 +39,8 @@ class LibModuleMissing(Exception): pass
 def load_library():
     if sys.platform == 'darwin':
         library_paths = (os.path.join(os.path.dirname(__file__), 'libsecp256k1.0.dylib'),
-                         'libsecp256k1.0.dylib')
+                         'libsecp256k1.0.dylib',
+                         'libsecp256k1.dylib')
     elif sys.platform in ('windows', 'win32'):
         library_paths = (os.path.join(os.path.dirname(__file__), 'libsecp256k1-0.dll'),
                          'libsecp256k1-0.dll')
